@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+# Original hackathon files are kept locally only: they contain leaked API keys.
+code.zip
+legacy/
+/index.html
+/explore.html
+/classroom.html

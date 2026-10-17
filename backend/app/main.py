@@ -1,0 +1,27 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+
+from app.config import get_settings
+from app.db import engine
+from app.routers import admin, ai, classrooms, games, leaderboard, me, news, quiz
+
+app = FastAPI(title="Mirava API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+for r in (me, quiz, leaderboard, games, classrooms, news, admin, ai):
+    app.include_router(r.router)
+
+
+@app.get("/api/health", tags=["health"])
+def health() -> dict:
+    with engine.connect() as conn:
+        conn.execute(text("select 1"))
+    return {"status": "ok"}

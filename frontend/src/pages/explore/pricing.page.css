@@ -1,0 +1,225 @@
+/* ============ LENS MODAL — clean, elegant, cinematic ============ */
+#museumLensV2 {
+  position: fixed;
+  inset: 0;
+  z-index: 100001;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .3s ease, visibility .3s ease;
+}
+#museumLensV2.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+#museumLensV2 .lens-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10,5,8,.86);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.lens-panel {
+  position: relative;
+  width: min(960px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 26px;
+  background:
+    radial-gradient(ellipse at 80% 10%, rgba(241,180,60,.08), transparent 50%),
+    linear-gradient(160deg, #1c1015 0%, #2a181f 55%, #1a1015 100%);
+  border: 1px solid rgba(241,180,60,.28);
+  box-shadow:
+    0 60px 140px rgba(0,0,0,.65),
+    0 0 0 1px rgba(241,180,60,.06) inset,
+    0 0 100px rgba(241,180,60,.08);
+  transform: translateY(24px) scale(.97);
+  transition: transform .42s cubic-bezier(.2,.85,.2,1);
+  color: #fff;
+}
+#museumLensV2.open .lens-panel {
+  transform: translateY(0) scale(1);
+}
+.lens-panel::-webkit-scrollbar { width: 6px; }
+.lens-panel::-webkit-scrollbar-thumb {
+  background: rgba(241,180,60,.35);
+  border-radius: 99px;
+}
+
+.lens-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 10;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.22);
+  background: rgba(20,10,14,.6);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: all .3s cubic-bezier(.2,.8,.2,1);
+  font-family: inherit;
+}
+.lens-close:hover {
+  transform: rotate(90deg) scale(1.08);
+  background: #df5934;
+  border-color: #df5934;
+}
+
+.lens-hero {
+  position: relative;
+  height: 300px;
+  overflow: hidden;
+  border-radius: 26px 26px 0 0;
+  background: #2c1620;
+}
+.lens-hero-img {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: saturate(.85) brightness(.85);
+  animation: lensHeroIn 1s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes lensHeroIn {
+  from { transform: scale(1.12); filter: blur(6px) saturate(.7) brightness(.6); }
+  to   { transform: scale(1);    filter: blur(0) saturate(.85) brightness(.85); }
+}
+.lens-hero-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(20,10,14,.35) 0%, transparent 30%, transparent 42%, rgba(20,10,14,.95) 100%);
+}
+.lens-hero-caption {
+  position: absolute;
+  left: 32px;
+  right: 32px;
+  bottom: 28px;
+  z-index: 2;
+}
+.lens-hero-eyebrow {
+  display: inline-block;
+  font: 700 8.5px 'DM Mono';
+  letter-spacing: .22em;
+  color: #f6c34f;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border: 1px solid rgba(241,180,60,.4);
+  border-radius: 99px;
+  background: rgba(241,180,60,.08);
+  margin-bottom: 12px;
+  backdrop-filter: blur(6px);
+}
+.lens-hero-caption h2 {
+  font: 600 clamp(36px, 4.6vw, 58px)/1 'Playfair Display';
+  letter-spacing: -.045em;
+  margin: 0;
+  color: #fff;
+  text-shadow: 0 4px 24px rgba(0,0,0,.6);
+}
+.lens-hero-sub {
+  margin: 8px 0 0;
+  font: 500 12px 'DM Mono';
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.6);
+}
+
+.lens-body { padding: 30px 32px 34px; }
+
+.lens-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+.lens-block {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+  border: 1px solid rgba(255,255,255,.08);
+}
+.lens-block.wide { grid-column: 1 / -1; }
+.lens-block small {
+  display: block;
+  font: 700 8.5px 'DM Mono';
+  letter-spacing: .2em;
+  color: #e09a72;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.lens-block strong {
+  font: 600 14px 'Manrope';
+  color: #fff;
+  line-height: 1.5;
+}
+
+.lens-section { margin-bottom: 24px; }
+.lens-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: 600 20px 'Playfair Display';
+  letter-spacing: -.01em;
+  color: #fff;
+  margin: 0 0 12px;
+}
+.lens-section h3 .dash {
+  display: inline-block;
+  width: 28px;
+  height: 2px;
+  background: linear-gradient(90deg, #f1b43c, #df5934);
+  border-radius: 99px;
+}
+.lens-section p {
+  font-size: 14px;
+  line-height: 1.75;
+  color: #cdb9bd;
+  margin: 0;
+}
+.lens-section.lens-lens {
+  padding: 18px 22px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(241,180,60,.08), rgba(223,89,52,.04));
+  border-left: 3px solid #f1b43c;
+}
+.lens-section.lens-lens p {
+  font-style: italic;
+  color: #f0dfd1;
+  font-size: 14.5px;
+}
+
+.lens-swatches {
+  display: flex;
+  gap: 10px;
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+.lens-swatch {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.16);
+  transition: transform .3s cubic-bezier(.2,.8,.2,1);
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
+}
+.lens-swatch:hover {
+  transform: scale(1.15) translateY(-3px);
+  border-color: rgba(255,255,255,.4);
+}
+
+@media (max-width: 640px) {
+  .lens-hero { height: 220px; }
+  .lens-hero-caption { left: 22px; right: 22px; bottom: 20px; }
+  .lens-body { padding: 22px 20px 26px; }
+  .lens-grid { grid-template-columns: 1fr; }
+}

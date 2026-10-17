@@ -1,0 +1,48 @@
+/* Styles added by the React port (no legacy equivalent). */
+
+/* AccountMenu sits where the legacy .account-area was. */
+.top .explore-account {
+  flex-shrink: 0;
+}
+
+/* Shivaji result: XP, badges and guest note inside the game overlay. */
+.shivaji-score {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  max-width: 90%;
+  margin: -6px 0 18px;
+  text-align: center;
+  font-size: 13px;
+  color: #eadfd7;
+}
+.shivaji-score b {
+  color: var(--gold);
+}
+.shivaji-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.shivaji-badges i {
+  font-style: normal;
+  font: 600 11px Manrope;
+  padding: 5px 11px;
+  border-radius: 99px;
+  background: rgba(241, 180, 60, 0.14);
+  border: 1px solid rgba(241, 180, 60, 0.35);
+  color: #ffd879;
+}
+.shivaji-guest,
+.shivaji-score-error {
+  font-size: 12px;
+  color: #cbb9bb;
+}
+.shivaji-guest a {
+  color: var(--gold);
+  text-decoration: underline;
+}
+.shivaji-boards {
+  margin-top: 22px;
+}
