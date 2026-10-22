@@ -9,7 +9,7 @@ export const CIVS: Record<string, Civ> = {
       label: '2600–1900 BCE · PUNJAB · RAVI RIVER',
       sub: 'City planning, craft and trade at a scale that still surprises archaeologists.',
       tags: ['Grid streets', 'Standardised bricks', 'Craft economy', 'Long-distance trade'],
-      image: 'https://images.unsplash.com/photo-1587474260584-136574528ed5?auto=format&fit=crop&w=1400&q=85',
+      image: 'https://miro.medium.com/1*uUphE-5CENnedhaPg_MAYQ.jpeg',
       cards: [
         { label: 'THE CITY',       headline: 'Grid-planned streets with carefully aligned blocks.',               body: 'Harappan cities were laid out on a grid. Streets ran at right angles, and neighbourhoods were organised around drainage and circulation.', chip: 'Urban planning' },
         { label: 'THE CRAFT',      headline: 'Standardised bricks, beads and seals that travelled far.',          body: 'Craft quarters produced beads, weights and seals with astonishing consistency — a sign of specialist skill and coordinated production.', chip: 'Craft economy' },
@@ -23,7 +23,7 @@ export const CIVS: Record<string, Civ> = {
       label: 'c. 2500 BCE · SINDH · INDUS RIVER',
       sub: 'Water, streets and the Great Bath — an ancient story of urban infrastructure.',
       tags: ['Covered drains', 'Great Bath', 'Urban blocks', 'Sanitation'],
-      image: 'https://images.unsplash.com/photo-1609766418204-94aae0ecf4e3?auto=format&fit=crop&w=1400&q=85',
+      image: 'https://visitsilkroad.org/wp-content/uploads/2021/04/Mohenjo-Daro-Archaeological-Site-Pakistan-2.jpg',
       cards: [
         { label: 'THE WATER',      headline: 'Covered drains and bathing spaces across an entire city.',         body: 'Mohenjo-daro had a sophisticated drainage network — an engineering story about public infrastructure, not just private homes.', chip: 'Sanitation' },
         { label: 'THE GREAT BATH', headline: 'A monumental structure at the heart of the city.',                 body: 'The Great Bath is one of the most striking surviving features of the site. Its purpose — ceremonial, ritual, communal — is still debated.', chip: 'Monumental' },
@@ -37,7 +37,7 @@ export const CIVS: Record<string, Civ> = {
       label: '3000–1500 BCE · KUTCH · GUJARAT',
       sub: 'Reservoirs, stone architecture and water in a dry island landscape.',
       tags: ['Reservoir network', 'Stone architecture', 'Zoned city', 'Water harvesting'],
-      image: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=1400&q=85',
+      image: 'https://tripandtales.com/wp-content/uploads/2025/12/Citadel.webp',
       cards: [
         { label: 'THE RESERVOIRS', headline: 'A city that engineered around scarcity.',                          body: 'Dholavira sits on a dry island. Its inhabitants built elaborate reservoirs and channels — turning climate adaptation into urban design.', chip: 'Water harvesting' },
         { label: 'THE STONE',      headline: 'Monumental stone architecture — not just brick.',                  body: 'Unlike other Indus cities, Dholavira leans heavily on dressed stone. Walls, gateways and platforms show real architectural ambition.', chip: 'Stone craft' },
@@ -51,7 +51,7 @@ export const CIVS: Record<string, Civ> = {
       label: '322–185 BCE · NORTHERN & CENTRAL SOUTH ASIA',
       sub: 'Empire, roads and Ashokan edicts — governance written into the landscape.',
       tags: ['Imperial roads', 'Ashokan edicts', 'Administrative centres', 'Trade routes'],
-      image: 'https://images.unsplash.com/photo-1532664189809-02133fee698d?auto=format&fit=crop&w=1400&q=85',
+      image: 'https://dsqe6ephsjxi.cloudfront.net/cms/kingdoms_2023-1-5-12:45:32_img.jpg',
       cards: [
         { label: 'THE EMPIRE',     headline: 'A political network across an enormous territory.',                body: 'The Mauryan Empire connected a vast region through administration, roads and messaging — an early experiment in large-scale governance.', chip: 'Empire' },
         { label: 'THE EDICTS',     headline: 'Ashoka turns stone into public speech.',                           body: 'Rock and pillar inscriptions carried ideas about dhamma into public spaces. Governance became something people could read on the landscape.', chip: 'Public ethics' },
@@ -65,7 +65,7 @@ export const CIVS: Record<string, Civ> = {
       label: 'c. 320–550 CE · NORTHERN INDIA',
       sub: 'Mathematics, astronomy, literature and classical arts in a long building period.',
       tags: ['Aryabhata', 'Sanskrit literature', 'Temple arts', 'Astronomy'],
-      image: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=1400&q=85',
+      image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRqKTWmuwauF8rlN58KfuheNmeg0bkuk5zzXwRppoB_8w&s=10',
       cards: [
         { label: 'THE SCHOLARS',   headline: 'Aryabhata and others reshape how people understand numbers and the sky.', body: 'Astronomy, mathematics and precise observation come together in a period that would later be called classical.', chip: 'Science' },
         { label: 'THE ATELIER',    headline: 'Sanskrit literature and sculpture flourish.',                       body: 'Courtly poetry, refined sculpture and temple traditions develop sophisticated new visual and literary languages.', chip: 'Art & literature' },
@@ -79,7 +79,7 @@ export const CIVS: Record<string, Civ> = {
       label: 'c. 300 BCE–300 CE · SOUTHERN TAMILAKAM',
       sub: 'Poetry, ports and five landscapes — a classical world that still speaks to us.',
       tags: ['Sangam poetry', 'Maritime trade', 'Five tinai', 'Port cities'],
-      image: 'https://images.unsplash.com/photo-1604600160534-0f6ad25a41c2?auto=format&fit=crop&w=1400&q=85',
+      image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQmom38sl52xh6DQPub03r5ZeNnEBr7Y5cURUpyrUTlPWZzJ5Cx_uxoBd8&s=10',
       cards: [
         { label: 'THE POETRY',     headline: 'A literary world organised around five landscapes.',                body: 'Sangam poetry gives unusually vivid glimpses of love, war, trade and everyday life in the ancient Tamil region.', chip: 'Sangam corpus' },
         { label: 'THE PORTS',      headline: 'Maritime trade across the Indian Ocean.',                          body: 'Ports connected southern India with distant markets — beads, spices, textiles and stories travelled with the ships.', chip: 'Ocean trade' },

@@ -171,12 +171,14 @@
   gap: 4px;
   padding: 20px 6px 26px;
   overflow-x: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overflow-y: hidden;
   scroll-behavior: smooth;
   border-top: 1px solid rgba(241,180,60,0.14);
   border-bottom: 1px solid rgba(241,180,60,0.14);
 }
-.time-timeline-track::-webkit-scrollbar { height: 4px; }
+.time-timeline-track::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .time-timeline-track::-webkit-scrollbar-thumb { background: rgba(241,180,60,0.3); border-radius: 99px; }
 
 .time-node {

@@ -14,8 +14,17 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+# Created with raw SQL in migrations (0002/0004), not declared on the models.
+MANUAL_OBJECTS = {
+    "profiles_id_auth_users_fkey", "ix_quiz_attempts_date_score", "ix_quiz_sessions_player_date",
+    "ix_game_scores_game_score", "ix_news_published", "ix_profiles_total_xp", "ix_recipes_shared",
+}
+
+
 def include_object(obj, name, type_, reflected, compare_to):
     # Supabase owns the auth/storage/realtime schemas; never autogenerate for them.
+    if reflected and compare_to is None and name in MANUAL_OBJECTS:
+        return False
     return getattr(obj, "schema", None) in (None, "public")
 
 

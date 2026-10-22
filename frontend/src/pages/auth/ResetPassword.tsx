@@ -28,7 +28,7 @@ export default function ResetPassword() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
-    if (password.length < 8) return setError('Password must be at least 8 characters.')
+    if (password.length < 12) return setError('Use a password of at least 12 characters.')
     if (password !== confirm) return setError('Passwords do not match.')
     setBusy(true)
     try {
@@ -56,7 +56,7 @@ export default function ResetPassword() {
             id="password"
             label="New password"
             type="password"
-            placeholder="At least 8 characters"
+            placeholder="At least 12 characters"
             autoComplete="new-password"
             required
             value={password}

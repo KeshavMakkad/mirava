@@ -99,8 +99,12 @@ export function KinWords({ active, toast, speak }: Props) {
                 <span>{n}</span>
                 <span>{FAMILIES[f][0].split(' ')[0]}</span>
               </div>
-              <div className="nt">{w[0] || w[1]}</div>
-              <div className="rm">{w[1]}</div>
+              <div className="nt" translate="no">
+                {w[0] || w[1]}
+              </div>
+              <div className="rm" translate="no">
+                {w[1]}
+              </div>
               <span className="rt"></span>
             </div>
           )

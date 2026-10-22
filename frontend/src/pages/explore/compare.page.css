@@ -1,0 +1,46 @@
+/* Ported from the new explore.html: Chronoscope "Then & Now" year comparator. */
+/* CHRONOSCOPE | TIME-TO-TIME COMPARISON */
+#miravaCompare{position:relative;isolation:isolate;margin:38px 0 48px;padding:clamp(22px,4.5vw,58px);overflow:hidden;border:1px solid rgba(217,175,105,.48);border-radius:26px;background:radial-gradient(ellipse at 94% 0%,rgba(216,157,60,.18),transparent 36%),linear-gradient(140deg,#25171d 0%,#39232b 52%,#1e161b 100%);color:#f8ecda;box-shadow:0 24px 60px rgba(23,14,15,.18)}
+#miravaCompare:before{content:'';position:absolute;inset:0;pointer-events:none;z-index:-1;opacity:.18;background-image:repeating-linear-gradient(90deg,transparent 0,transparent 85px,rgba(225,181,111,.15) 86px,transparent 87px)}
+#miravaCompare *{box-sizing:border-box}
+#miravaCompare .cmp-kicker{font:700 10px 'DM Mono',monospace;letter-spacing:.24em;color:#eec27e;display:flex;align-items:center;gap:12px}
+#miravaCompare .cmp-kicker:before{content:'';width:30px;height:1px;background:#d5ac6e}
+#miravaCompare .cmp-head{display:flex;justify-content:space-between;align-items:end;gap:24px;flex-wrap:wrap;margin:18px 0 30px}
+#miravaCompare h3{font:500 clamp(32px,4.1vw,60px)/1.05 'Playfair Display',Georgia,serif;letter-spacing:-.04em;margin:0;max-width:760px;color:#fff0da}
+#miravaCompare h3 em{color:#edba68;font-weight:400}
+#miravaCompare .cmp-sub{max-width:610px;color:#d4c5b8;font:400 13px/1.9 'Manrope',sans-serif;margin:14px 0 0}
+#miravaCompare .cmp-signet{width:70px;height:70px;border-radius:50%;border:1px solid rgba(228,176,94,.48);display:grid;place-items:center;color:#e8b568;font:28px Georgia,serif;box-shadow:inset 0 0 0 8px rgba(241,186,101,.055)}
+#miravaCompare .cmp-controls{display:grid;grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);align-items:end;gap:17px;padding:20px;border:1px solid rgba(241,193,127,.2);border-radius:18px;background:rgba(255,255,255,.04)}
+#miravaCompare .cmp-field{min-width:0}
+#miravaCompare .cmp-field label{display:block;margin-bottom:11px;font:700 10px 'DM Mono',monospace;letter-spacing:.14em;color:#dfbe8d}
+#miravaCompare .cmp-field select{display:block;width:100%;min-width:0;background:#f7efdf;color:#35232a;border:1px solid #d6bd94;border-radius:10px;padding:15px 38px 15px 15px;font:700 17px 'Manrope',sans-serif;cursor:pointer}
+#miravaCompare .cmp-swap{align-self:end;height:53px;width:53px;border:1px solid rgba(240,189,116,.5);background:rgba(232,179,102,.09);color:#ffd398;border-radius:50%;font-size:23px;cursor:pointer;transition:transform .25s,background .25s}
+#miravaCompare .cmp-swap:hover{background:rgba(232,179,102,.22);transform:rotate(180deg)}
+#miravaCompare .cmp-result{margin-top:26px}
+#miravaCompare .cmp-metric{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px;font:700 10px 'DM Mono',monospace;letter-spacing:.1em;color:#e9c99c}
+#miravaCompare .cmp-interval{background:rgba(240,184,97,.12);border:1px solid rgba(240,184,97,.3);border-radius:99px;padding:10px 16px}
+#miravaCompare .cmp-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+#miravaCompare .cmp-panel{min-width:0;border-radius:18px;overflow:hidden;background:#f9f1e4;color:#37252c;border:1px solid rgba(255,215,163,.5)}
+#miravaCompare .cmp-panel-top{min-height:168px;position:relative;display:flex;flex-direction:column;justify-content:end;padding:24px;background:linear-gradient(145deg,#6c453c,#38202b);overflow:hidden;color:#fff5e5}
+#miravaCompare .cmp-panel:nth-child(2) .cmp-panel-top{background:linear-gradient(145deg,#5c443c,#273a40)}
+#miravaCompare .cmp-panel-top:after{content:'';position:absolute;width:230px;height:230px;border-radius:50%;border:1px solid rgba(255,225,170,.23);right:-54px;top:-107px;box-shadow:0 0 0 28px rgba(255,225,170,.035),0 0 0 60px rgba(255,225,170,.025);pointer-events:none}
+#miravaCompare .cmp-panel-top .cmp-era-label{font:700 9px 'DM Mono',monospace;letter-spacing:.2em;color:#f4cc98;z-index:1}
+#miravaCompare .cmp-panel-top strong{font:500 clamp(56px,7vw,94px)/1 Georgia,serif;letter-spacing:-.065em;z-index:1;margin:10px 0 5px}
+#miravaCompare .cmp-panel-top p{font:600 14px/1.5 Manrope,sans-serif;z-index:1;margin:0;color:#f3dbc4}
+#miravaCompare .cmp-panel-body{padding:25px}
+#miravaCompare .cmp-panel-body>p{font:500 13px/1.85 Manrope,sans-serif;margin:0 0 16px;color:#5b4145;min-height:70px}
+#miravaCompare .cmp-detail{padding:15px 0;border-top:1px solid #e5d6c2}
+#miravaCompare .cmp-detail span{font:700 9px 'DM Mono',monospace;letter-spacing:.13em;color:#99623f;display:block;margin-bottom:7px}
+#miravaCompare .cmp-detail p{font:500 12px/1.75 Manrope,sans-serif;color:#402d31;margin:0}
+#miravaCompare .cmp-change{margin-top:20px;background:rgba(255,243,226,.065);border:1px solid rgba(237,187,110,.22);border-radius:17px;padding:clamp(18px,3vw,30px)}
+#miravaCompare .cmp-change h4{font:500 clamp(23px,3vw,36px) 'Playfair Display',serif;color:#f5dbb6;margin:7px 0 17px}
+#miravaCompare .cmp-change-head{font:700 10px 'DM Mono',monospace;letter-spacing:.17em;color:#e9b873}
+#miravaCompare .cmp-change-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#miravaCompare .cmp-change-item{background:rgba(255,255,255,.045);border:1px solid rgba(248,219,170,.13);border-radius:12px;padding:16px}
+#miravaCompare .cmp-change-item b{font:700 10px 'DM Mono',monospace;letter-spacing:.1em;color:#eec58a;display:block;margin-bottom:9px}
+#miravaCompare .cmp-change-item p{margin:0;color:#e6d9c9;font:400 12px/1.8 Manrope,sans-serif}
+#miravaCompare .cmp-change-item small{display:block;color:#bfb0a2;margin:8px 0;font:500 10px 'DM Mono',monospace}
+#miravaCompare .cmp-footnote{font:400 11px/1.75 Manrope,sans-serif;color:#cdbda9;margin:16px 0 0}
+@media(max-width:760px){#miravaCompare .cmp-signet{display:none}#miravaCompare .cmp-controls{grid-template-columns:minmax(0,1fr) 45px minmax(0,1fr);padding:12px;gap:8px}#miravaCompare .cmp-field select{font-size:13px;padding:12px 3px}#miravaCompare .cmp-field label{font-size:8px}#miravaCompare .cmp-swap{width:40px;height:40px;font-size:18px}#miravaCompare .cmp-panels{gap:10px}#miravaCompare .cmp-panel-top{padding:16px;min-height:135px}#miravaCompare .cmp-panel-top strong{font-size:clamp(38px,9vw,65px)}#miravaCompare .cmp-panel-top p{font-size:11px}#miravaCompare .cmp-panel-body{padding:14px}#miravaCompare .cmp-panel-body>p{min-height:0}#miravaCompare .cmp-change-grid{grid-template-columns:1fr}}
+@media(max-width:470px){#miravaCompare{padding:18px 12px}#miravaCompare .cmp-panels{grid-template-columns:1fr}#miravaCompare .cmp-panel-top{min-height:124px}#miravaCompare .cmp-panel-body>p{min-height:0}#miravaCompare .cmp-change{padding:17px}#miravaCompare .cmp-metric{font-size:9px}}
+@media(prefers-reduced-motion:reduce){#miravaCompare .cmp-swap{transition:none}}

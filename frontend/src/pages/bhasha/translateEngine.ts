@@ -7,6 +7,7 @@
 import { api } from '../../lib/api'
 import { LANGS, type Lang } from './data'
 import { LIPI, SOUND } from './engines'
+import { getLanguage } from '../../i18n'
 
 export const L = (c: string): Lang => LANGS.find((x) => x.c === c) as Lang
 
@@ -120,7 +121,9 @@ interface AiOut {
 
 export async function ai(text: string, sl: string, dl: string): Promise<AiOut> {
   const S = L(sl), D = L(dl)
-  const system = `You are Mirava Bhasha, an expert translator of Indian languages, ancient and modern, and a careful philologist. Translate the user's text from ${S.n} to ${D.n}. ${D.g === 'classical' ? `Write natural, grammatical ${D.n} as attested in classical texts; use ${D.s === 'taml' ? 'Tamil script' : 'Devanagari'}.` : `Use the standard script for ${D.n}.`} Reply with ONLY a JSON object, no markdown: {"translation": string, "romanization": string (IAST/ISO-15919), "words": [{"src": word in translation, "gloss": short English meaning}], "note": one short sentence on grammar, register or uncertainty}.`
+  // Glosses/notes follow the site language (English or Hindi).
+  const glossLang = getLanguage() === 'hi' ? 'Hindi' : 'English'
+  const system = `You are Mirava Bhasha, an expert translator of Indian languages, ancient and modern, and a careful philologist. Translate the user's text from ${S.n} to ${D.n}. ${D.g === 'classical' ? `Write natural, grammatical ${D.n} as attested in classical texts; use ${D.s === 'taml' ? 'Tamil script' : 'Devanagari'}.` : `Use the standard script for ${D.n}.`} Reply with ONLY a JSON object, no markdown: {"translation": string, "romanization": string (IAST/ISO-15919), "words": [{"src": word in translation, "gloss": short ${glossLang} meaning}], "note": one short ${glossLang} sentence on grammar, register or uncertainty}.`
   const reply = String((await api.ai.chat({ persona: 'translator', system, messages: [{ role: 'user', content: text }], max_tokens: 800 })) || '')
   const m = reply.match(/\{[\s\S]*\}/)
   if (m) {

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
+import { useLanguage } from '../../../i18n'
 import { FESTIVALS, type Festival } from '../data/festivals'
 
 const MONTHS = [
@@ -16,6 +17,7 @@ const MONTHS = [
   'December',
 ]
 const DAY_NAMES = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const DAY_NAMES_HI = ['रवि', 'सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि']
 const YEAR = 2026
 
 // Later entries win when two festivals share a date (as in the legacy page).
@@ -40,6 +42,7 @@ function MonthPage({
   const daysInMonth = new Date(YEAR, monthIndex + 1, 0).getDate()
   const season = FESTIVALS.find((f) => f.month === monthName)?.season || ''
   const monthFests = FESTIVALS.filter((f) => f.month === monthName)
+  const dayNames = useLanguage() === 'hi' ? DAY_NAMES_HI : DAY_NAMES
   return (
     <>
       <div className="page-head">
@@ -47,8 +50,8 @@ function MonthPage({
         <span className="page-season">{season || '—'}</span>
       </div>
       <div className="day-grid">
-        {DAY_NAMES.map((n, i) => (
-          <div className="day-name" key={`n${i}`}>
+        {dayNames.map((n, i) => (
+          <div className="day-name" key={`n${i}`} data-calendar-weekday={i} data-i18n-ignore="">
             {n}
           </div>
         ))}
@@ -230,7 +233,7 @@ export function Festivals() {
                   <img src={fest.image} alt={fest.name} loading="eager" />
                   <div className="detail-image-caption">
                     <span className="img-season">
-                      {fest.season} · {fest.month} {fest.day}
+                      {fest.season} · {fest.date || 'Date varies by region'}
                     </span>
                     <h3>{fest.name}</h3>
                   </div>

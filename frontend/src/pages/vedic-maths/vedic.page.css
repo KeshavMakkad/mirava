@@ -240,7 +240,7 @@ svg .lnk{transition:opacity .3s}
 
 @media (max-width:1150px){.hero{grid-template-columns:1fr;gap:28px}.lab,.arena{grid-template-columns:1fr}.mlist{position:static;display:grid;grid-template-columns:repeat(2,1fr)}.sgrid{grid-template-columns:repeat(3,1fr)}.tl{grid-template-columns:1fr 1fr}.nav{display:none}}
 @media (max-width:760px){.out,.cmp{grid-template-columns:minmax(0,1fr)}.stage{min-height:600px}.sgrid{grid-template-columns:1fr 1fr}.facts{grid-template-columns:1fr 1fr}.tl,.why3{grid-template-columns:1fr}.fld{width:calc(50% - 30px)}.mlist{grid-template-columns:1fr}.res .rk{grid-template-columns:1fr 1fr}.top .tbtn span{display:none}.origin{grid-template-columns:1fr}}
-@media (max-width:480px){.sgrid{grid-template-columns:1fr}.fld{width:100%}.opsym{display:none}}
+@media (max-width:480px){.top{gap:7px;padding:10px 12px;flex-wrap:wrap}.top .brand{font-size:22px;flex-shrink:0}.top .tag{max-width:100px;font-size:9px;letter-spacing:0;padding:5px 7px}.top .tbtn{padding:0 9px;gap:5px;flex-shrink:0}.top .tbtn b{padding:1px 6px}.top .sp{min-width:0}.sgrid{grid-template-columns:1fr}.fld{width:100%}.opsym{display:none}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001s!important;transition-duration:.001s!important}html{scroll-behavior:auto}}
 
 /* ===== merged-page additions (Sutra Lab palette) ===== */

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
-import { AuthShell, Field, Msg } from './AuthShell'
+import { AuthShell, Field, GoogleButton, Msg } from './AuthShell'
 import { errorText } from './authUtils'
 
 type Mode = 'password' | 'magic' | 'forgot'
@@ -10,7 +10,7 @@ type Sent = { kind: 'magic' | 'reset'; email: string } | null
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function Login() {
-  const { signIn, sendMagicLink, sendPasswordReset, continueAsGuest, isGuest } = useAuth()
+  const { signIn, signInWithGoogle, sendMagicLink, sendPasswordReset, continueAsGuest, isGuest } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from || '/explore'
@@ -18,7 +18,7 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>('password')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState<null | 'submit' | 'guest'>(null)
+  const [busy, setBusy] = useState<null | 'submit' | 'guest' | 'google'>(null)
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState<Sent>(null)
 
@@ -31,8 +31,9 @@ export default function Login() {
     e.preventDefault()
     setError(null)
     const addr = email.trim().toLowerCase()
-    if (!EMAIL_RE.test(addr)) return setError('Please enter a valid email address.')
-    if (mode === 'password' && !password) return setError('Please enter your email and password.')
+    if (!addr || addr.length > 254 || !EMAIL_RE.test(addr)) return setError('Please enter a valid email address.')
+    if (mode === 'password' && (!password || password.length > 128))
+      return setError('Please enter your password (up to 128 characters).')
     setBusy('submit')
     try {
       if (mode === 'password') {
@@ -47,6 +48,18 @@ export default function Login() {
       setError(errorText(err))
     }
     setBusy(null)
+  }
+
+  const onGoogle = async () => {
+    setError(null)
+    setBusy('google')
+    try {
+      await signInWithGoogle(from)
+      // The browser is now leaving for Google.
+    } catch (err) {
+      setError(errorText(err, 'Google sign-in is unavailable right now. Please use your email instead.'))
+      setBusy(null)
+    }
   }
 
   const onGuest = async () => {
@@ -114,6 +127,7 @@ export default function Login() {
           type="email"
           placeholder="you@example.com"
           autoComplete="email"
+          maxLength={254}
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -125,6 +139,7 @@ export default function Login() {
             type="password"
             placeholder="••••••••"
             autoComplete="current-password"
+            maxLength={128}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -146,6 +161,7 @@ export default function Login() {
             </button>
           )}
         </div>
+        {mode === 'password' && <GoogleButton onClick={onGoogle} busy={busy === 'google'} disabled={!!busy} />}
         <button className="btn" type="submit" disabled={!!busy}>
           {busy === 'submit' ? (mode === 'password' ? 'Opening Mirava…' : 'Sending…') : submitLabel}
         </button>
@@ -157,6 +173,7 @@ export default function Login() {
       <p className="switch">
         Don't have an account? <Link to="/signup">Sign up</Link>
       </p>
+      <p className="note">Your account is saved with MIRAVA and works across your devices.</p>
       <p className="note">Guests can explore and play; create an account to keep your progress and join leaderboards.</p>
     </AuthShell>
   )

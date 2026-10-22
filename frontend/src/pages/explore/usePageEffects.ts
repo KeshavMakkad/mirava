@@ -1,126 +1,150 @@
 import { useEffect, type RefObject } from 'react'
 import { useLocation } from 'react-router-dom'
+import { MOTION_EVENT, mountGlobe, type ClassToggle } from './globe'
+import { mountScrollJourney } from './scrollJourney'
+
+const DEPTH_SELECTOR = '.time-hud, .stage-visual, .era-card, .civil-hero, .civil-postcard, .museum-piece, .mir-price-card'
 
 /**
- * Page-wide polish ported from the legacy "dynamic patch" and reveal scripts:
- * scroll progress bar, sticky top bar, back-to-top button, hero parallax,
- * cursor glow, click ripples and reveal-on-scroll.
+ * Page-wide effects ported from the new explore.html:
+ *  - "mirava-spatial-script": motion-ready/paused state, pointer depth tilt on
+ *    cards, reading-progress line and hero parallax (until the scroll journey
+ *    takes over);
+ *  - "mirava-globe-script": the WebGL heritage globe in the hero (./globe.ts);
+ *  - "mirava-scroll-journey": chapter reveals and the chapter dock (./scrollJourney.ts).
+ * Classes the original put on <html> go on both the page scope and the
+ * explore root, so the scoped stylesheets match either form of selector.
  */
 export function usePageEffects(rootRef: RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     const root = rootRef.current
-    if (!root) return
+    const page = root?.closest<HTMLElement>('[data-page]')
+    if (!root || !page) return
     const cleanups: (() => void)[] = []
-    const listen = <T extends EventTarget>(target: T, type: string, fn: EventListener, opts?: AddEventListenerOptions) => {
+    const listen = (target: EventTarget, type: string, fn: EventListener, opts?: AddEventListenerOptions) => {
       target.addEventListener(type, fn, opts)
       cleanups.push(() => target.removeEventListener(type, fn, opts))
     }
-
-    const progress = root.querySelector<HTMLElement>('#miravaScrollProgress')
-    const topbar = root.querySelector<HTMLElement>('.top')
-    const heroBody = root.querySelector<HTMLElement>('.hero-body')
-    const backTop = root.querySelector<HTMLElement>('#miravaBackTop')
-    const glow = root.querySelector<HTMLElement>('#miravaCursorGlow')
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-    // Scroll-linked chrome.
-    let ticking = false
-    let raf = 0
-    const paint = () => {
-      const doc = document.documentElement
-      const max = Math.max(1, doc.scrollHeight - window.innerHeight)
-      const y = Math.max(0, window.scrollY || doc.scrollTop || 0)
-      if (progress) progress.style.width = Math.min(100, (y / max) * 100) + '%'
-      topbar?.classList.toggle('mirava-scrolled', y > 42)
-      backTop?.classList.toggle('show', y > 650)
-      if (heroBody && !reduce && y < window.innerHeight * 1.1) {
-        heroBody.style.transform = `translate3d(0, ${Math.min(48, y * 0.055)}px, 0)`
-      }
-      ticking = false
+    const setRootClass: ClassToggle = (name, on) => {
+      page.classList.toggle(name, on)
+      root.classList.toggle(name, on)
     }
-    const onScroll = () => {
-      if (!ticking) {
-        ticking = true
-        raf = requestAnimationFrame(paint)
-      }
-    }
-    listen(window, 'scroll', onScroll, { passive: true })
-    listen(window, 'resize', onScroll, { passive: true })
-    cleanups.push(() => cancelAnimationFrame(raf))
-    paint()
+    const hasRootClass = (name: string) => page.classList.contains(name)
 
-    if (backTop) {
-      listen(backTop, 'click', () => window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' }))
-    }
+    const hero = root.querySelector<HTMLElement>('#top')
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)')
+    setRootClass('mirava-motion-ready', true)
+    setRootClass('mirava-motion-paused', reduced.matches)
 
-    // Cursor glow.
-    if (glow && window.matchMedia('(pointer:fine)').matches && !reduce) {
-      listen(
-        document,
-        'pointermove',
-        ((e: PointerEvent) => {
-          glow.style.left = e.clientX + 'px'
-          glow.style.top = e.clientY + 'px'
-          glow.style.opacity = '1'
-        }) as EventListener,
-        { passive: true },
-      )
-      listen(document, 'mouseleave', () => {
-        glow.style.opacity = '0'
-      })
-    }
-
-    // Click ripples on buttons / pills / nav links (not the shared account menu or the map).
-    listen(root, 'click', ((e: MouseEvent) => {
-      if (reduce) return
-      const target = e.target as HTMLElement | null
-      const host = target?.closest<HTMLElement>('button,.pill,.top nav a')
-      if (!host || host.closest('.mv-account, .leaflet-container')) return
-      const r = host.getBoundingClientRect()
-      const size = Math.max(r.width, r.height) * 2.15
-      const ripple = document.createElement('span')
-      ripple.className = 'mirava-ripple'
-      ripple.style.width = ripple.style.height = size + 'px'
-      ripple.style.left = e.clientX - r.left + 'px'
-      ripple.style.top = e.clientY - r.top + 'px'
-      host.classList.add('mirava-ripple-host')
-      host.appendChild(ripple)
-      ripple.addEventListener('animationend', () => ripple.remove(), { once: true })
-    }) as EventListener)
-
-    // Reveal on scroll: legacy `.section` → .visible, and the inline fade for `.mir-section`.
+    // Depth: cards tilt toward the pointer.
+    const registerDepth = (scope: ParentNode) =>
+      scope.querySelectorAll(DEPTH_SELECTOR).forEach((el) => el.classList.add('mirava-depth'))
+    registerDepth(root)
     if ('IntersectionObserver' in window) {
-      const io = new IntersectionObserver(
-        (entries) => entries.forEach((en) => en.isIntersecting && en.target.classList.add('visible')),
-        { threshold: 0.15, rootMargin: '0px 0px -40px 0px' },
+      const scenes = new IntersectionObserver(
+        (entries) => entries.forEach((entry) => entry.target.classList.toggle('mirava-scene-offscreen', !entry.isIntersecting)),
+        { threshold: 0 },
       )
-      root.querySelectorAll('.section, .footer-grid > div').forEach((el) => io.observe(el))
-      const fade = new IntersectionObserver(
-        (entries) =>
-          entries.forEach((en) => {
-            if (!en.isIntersecting) return
-            const el = en.target as HTMLElement
-            el.style.opacity = '1'
-            el.style.transform = 'translateY(0)'
-            fade.unobserve(el)
-          }),
-        { threshold: 0.08 },
-      )
-      root.querySelectorAll<HTMLElement>('.mir-section').forEach((el) => {
-        el.style.opacity = '0'
-        el.style.transform = 'translateY(25px)'
-        el.style.transition = 'opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1)'
-        fade.observe(el)
-      })
-      cleanups.push(() => {
-        io.disconnect()
-        fade.disconnect()
-      })
-    } else {
-      root.querySelectorAll('.section, .footer-grid > div').forEach((el) => el.classList.add('visible'))
+      ;[hero, root.querySelector('#time')].forEach((el) => el && scenes.observe(el))
+      cleanups.push(() => scenes.disconnect())
     }
+    ;['stageCards', 'civilCards'].forEach((id) => {
+      const el = root.querySelector(`#${id}`)
+      if (!el) return
+      const mo = new MutationObserver(() => registerDepth(el))
+      mo.observe(el, { childList: true })
+      cleanups.push(() => mo.disconnect())
+    })
 
-    return () => cleanups.forEach((fn) => fn())
+    let activeCard: HTMLElement | null = null
+    let cardRect: DOMRect | null = null
+    let pointerFrame = 0
+    let px = 0,
+      py = 0
+    const clearDepth = () => {
+      if (pointerFrame) cancelAnimationFrame(pointerFrame)
+      pointerFrame = 0
+      if (activeCard) {
+        activeCard.style.setProperty('--mirava-angle', '0deg')
+        activeCard.classList.remove('mirava-depth-active')
+      }
+      activeCard = null
+      cardRect = null
+    }
+    const paintDepth = () => {
+      pointerFrame = 0
+      if (!activeCard || !cardRect) return
+      const x = Math.max(-1, Math.min(1, ((px - cardRect.left) / cardRect.width) * 2 - 1))
+      const y = Math.max(-1, Math.min(1, ((py - cardRect.top) / cardRect.height) * 2 - 1))
+      const length = Math.hypot(x, y)
+      if (length < 0.002) {
+        activeCard.style.setProperty('--mirava-angle', '0deg')
+        return
+      }
+      activeCard.style.setProperty('--mirava-axis', `${(-y / length).toFixed(4)} ${(x / length).toFixed(4)} 0`)
+      activeCard.style.setProperty('--mirava-angle', `${Math.min(length * 4, 5.5).toFixed(3)}deg`)
+    }
+    listen(
+      document,
+      'pointermove',
+      ((event: PointerEvent) => {
+        if (!finePointer.matches || hasRootClass('mirava-motion-paused') || event.pointerType !== 'mouse') return
+        // React may rewrite className (e.g. museum filters), so re-tag on the fly.
+        const card = (event.target as Element | null)?.closest?.<HTMLElement>(DEPTH_SELECTOR) ?? null
+        if (card && !root.contains(card)) return
+        card?.classList.add('mirava-depth')
+        if (card !== activeCard) {
+          clearDepth()
+          if (card) {
+            activeCard = card
+            cardRect = card.getBoundingClientRect()
+            card.classList.add('mirava-depth-active')
+          }
+        }
+        if (!activeCard) return
+        px = event.clientX
+        py = event.clientY
+        if (!pointerFrame) pointerFrame = requestAnimationFrame(paintDepth)
+      }) as EventListener,
+      { passive: true },
+    )
+    listen(document.documentElement, 'pointerleave', clearDepth)
+    listen(document, MOTION_EVENT, clearDepth)
+    listen(window, 'blur', clearDepth)
+    cleanups.push(clearDepth)
+
+    // A single scheduled update handles the reading line and hero parallax.
+    let scrollFrame = 0
+    const paintScroll = () => {
+      scrollFrame = 0
+      if (hasRootClass('mirava-scroll-ready')) {
+        clearDepth()
+        return
+      }
+      const distance = document.documentElement.scrollHeight - window.innerHeight
+      page.style.setProperty('--read-progress', String(distance > 0 ? Math.min(1, Math.max(0, window.scrollY / distance)) : 0))
+      if (hero && !hasRootClass('mirava-motion-paused')) {
+        hero.style.setProperty('--hero-travel', Math.min(1, Math.max(0, window.scrollY / hero.offsetHeight)).toFixed(3))
+      }
+      clearDepth()
+    }
+    const scheduleScroll = () => {
+      if (!scrollFrame) scrollFrame = requestAnimationFrame(paintScroll)
+    }
+    listen(window, 'scroll', scheduleScroll, { passive: true })
+    listen(window, 'resize', scheduleScroll, { passive: true })
+    cleanups.push(() => cancelAnimationFrame(scrollFrame))
+    paintScroll()
+
+    cleanups.push(mountGlobe(page, setRootClass))
+    cleanups.push(mountScrollJourney(page, root, setRootClass))
+
+    return () => {
+      cleanups.reverse().forEach((fn) => fn())
+      ;['mirava-motion-ready', 'mirava-motion-paused', 'mirava-scroll-ready'].forEach((c) => setRootClass(c, false))
+      page.style.removeProperty('--read-progress')
+    }
   }, [rootRef])
 }
 

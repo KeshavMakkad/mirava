@@ -27,3 +27,315 @@ html{scroll-padding-top:92px}body{overflow-x:hidden}
 @media(max-width:540px){.impact-display{min-height:370px;padding:28px}.impact-big{font-size:5rem;margin-top:42px}.season-copy{padding:27px}.challenge-aside{padding:30px}.challenge-aside h3{font-size:32px}.footer-grid{grid-template-columns:1fr}.footer-grid>div:first-child{grid-column:auto}.footer-bottom{flex-direction:column}.water-quote{padding:70px 18px}.preset-chip{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.ribbon-track,.section-ornament{animation:none}}
 @media print{.atlas-ribbon,.challenge-section,.floating-top,.final-cta,.site-footer,.season-tabs{display:none!important}.impact-section,.timeline-section,.faq-section{break-inside:avoid}}
+
+/* ─── MIRAVA unified light skin (from new mirava-quiz-theme.css, Jal Parampara part) ───
+ * The HTML put classes `mirava-quiz-skin mirava-quiz-jal` on <html>; here they map to
+ * the PageScope wrapper (`html.mv-page` → [data-page="jal-parampara"].mv-page). */
+/* Shared foundation ------------------------------------------------------- */
+html.mv-page {
+  color-scheme:light;
+  --q-bg:#f6f0e8;
+  --q-p1:#fffaf3;
+  --q-p2:#f4ebe0;
+  --q-p3:#eadfd1;
+  --q-ink:#24151a;
+  --q-dim:#6f5d5f;
+  --q-dim2:#8d7b78;
+  --q-gold:#f1b43c;
+  --q-gold2:#f8c950;
+  --q-gold-text:#94620a;
+  --q-wine:#55232f;
+  --q-orange:#df5934;
+  --q-green:#4f8a3c;
+  --q-line:rgba(150,95,20,.25);
+  --q-border:rgba(238,163,17,.27);
+  --q-shadow:0 18px 50px rgba(80,40,20,.105);
+  --q-card:linear-gradient(160deg,var(--q-p2),var(--q-p1));
+  --q-body:'Manrope','Noto Sans Devanagari',Arial,sans-serif;
+  --q-serif:'Playfair Display',Georgia,serif;
+  --q-mono:'DM Mono',monospace;
+  --gold:var(--q-gold);
+  --wine:var(--q-wine);
+  --wine-light:#773b48;
+  --saffron:var(--q-gold2);
+  --ink:var(--q-ink);
+  --muted:var(--q-dim);
+  --paper:var(--q-bg);
+  --cream:var(--q-p1);
+  --line:var(--q-line);
+  --sans:var(--q-body);
+  --serif:var(--q-serif);
+  --mono:var(--q-mono);
+}
+html.mv-page {
+  background:var(--q-bg) !important;
+  background-image:radial-gradient(circle at 15% 10%,rgba(241,180,60,.10),transparent 40%),
+    radial-gradient(circle at 90% 85%,rgba(223,89,52,.09),transparent 45%),
+    radial-gradient(circle at 60% 40%,rgba(250,247,243,.48),transparent 60%) !important;
+  color:var(--q-ink);
+  font-family:var(--q-body);
+  -webkit-font-smoothing:antialiased;
+}
+html.mv-page :is(button,input,select,textarea) {font-family:inherit}
+html.mv-page :is(button,a,input,select,textarea):focus-visible {
+  outline:3px solid var(--q-gold-text);
+  outline-offset:3px;
+}
+html.mv-page :is(h1,h2,h3,h4) {font-family:var(--q-serif)}
+html.mv-page :is(.eyebrow,.chapter,.meta,.count) {
+  letter-spacing:.12em;
+}
+html.mv-page :is(.eyebrow,.chapter) {color:var(--q-gold-text)}
+html.mv-page :is(.btn,.tab,.chip,.heritage,.feature,.recipe-card,.glass,.entry,.quiz-answer) {
+  transition:background .25s ease,border-color .25s ease,box-shadow .25s ease,color .25s ease,transform .25s ease;
+}
+html.mv-page :is(.btn,.tab,.chip):not(:disabled):hover {transform:translateY(-2px)}
+html.mv-page input[type=checkbox] {accent-color:var(--q-gold-text)}
+html.mv-page ::selection {background:#f8d88b;color:var(--q-ink)}
+
+/* Jal Parampara ---------------------------------------------------------- */
+html.mv-page .top {
+  background:rgba(247,242,234,.94);
+  color:var(--q-ink);
+  border-bottom:1px solid rgba(238,163,17,.30);
+  box-shadow:0 6px 23px rgba(80,40,20,.06);
+}
+html.mv-page .top .brand,
+html.mv-page .top .nav a {color:var(--q-ink)}
+html.mv-page .top .brand em {color:var(--q-gold-text)}
+html.mv-page .top .nav a {color:var(--q-dim)}
+html.mv-page .top .nav a:hover {color:var(--q-gold-text)}
+html.mv-page .top:after {background:linear-gradient(90deg,var(--q-gold),var(--q-orange));box-shadow:none}
+html.mv-page .menu-toggle {
+  color:var(--q-ink);
+  background:rgba(241,180,60,.08);
+  border-color:var(--q-border);
+}
+html.mv-page .mirava {
+  background:linear-gradient(135deg,var(--q-gold),var(--q-gold2));
+  border:1.5px solid var(--q-gold);
+  color:var(--q-ink);
+  box-shadow:0 8px 24px rgba(188,124,12,.14);
+}
+html.mv-page .mirava:hover {box-shadow:0 12px 30px rgba(188,124,12,.24)}
+html.mv-page .hero {
+  background:var(--q-bg);
+  color:var(--q-ink);
+  border-bottom:1px solid var(--q-border);
+}
+html.mv-page .hero-bg {
+  background-image:linear-gradient(90deg,#f6f0e8 4%,#f6f0e8f6 37%,#f6f0e8b8 72%,#f6f0e86e),
+    url('https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=2000&q=85');
+}
+html.mv-page .hero:before {
+  background:radial-gradient(ellipse at 75% 40%,rgba(241,180,60,.12),transparent 50%),
+    linear-gradient(0deg,rgba(246,240,232,.63),transparent 46%);
+}
+html.mv-page .hero:after {opacity:.28}
+html.mv-page .hero .eyebrow,
+html.mv-page .hero h1 em,
+html.mv-page .hero-micro b {color:var(--q-gold-text)}
+html.mv-page .hero .tagline {color:var(--q-wine)}
+html.mv-page .hero-description,
+html.mv-page .hero-micro,
+html.mv-page .hero-scroll {color:var(--q-dim)}
+html.mv-page .hero-scroll:after {background:var(--q-gold-text)}
+html.mv-page .btn {
+  border-radius:99px;
+  border:1.5px solid rgba(238,163,17,.48);
+}
+html.mv-page .btn.primary {
+  color:var(--q-ink);
+  background:linear-gradient(135deg,var(--q-gold),var(--q-gold2));
+  border-color:var(--q-gold);
+  box-shadow:0 10px 25px rgba(241,180,60,.18);
+}
+html.mv-page .btn.secondary,
+html.mv-page .btn.outline {
+  background:rgba(255,250,243,.83);
+  color:var(--q-ink);
+  border-color:rgba(238,163,17,.53);
+}
+html.mv-page .btn.dark {background:var(--q-wine);color:#fffaf3;border-color:var(--q-wine)}
+html.mv-page .btn:hover {box-shadow:0 10px 27px rgba(80,40,20,.14)}
+html.mv-page .section-dark,
+html.mv-page .timeline-section {
+  background:linear-gradient(165deg,#f0e5d7,#fffaf3);
+  color:var(--q-ink);
+}
+html.mv-page .section-dark .section-head p,
+html.mv-page .timeline-section .section-head p {color:var(--q-dim)}
+html.mv-page .section-dark .eyebrow[style],
+html.mv-page .timeline-section h2 em[style] {color:var(--q-gold-text)!important}
+html.mv-page .panel,
+html.mv-page .heritage,
+html.mv-page .journey-box,
+html.mv-page .plan-output,
+html.mv-page .challenge-card {
+  color:var(--q-ink);
+  background:var(--q-card);
+  border:1.5px solid var(--q-border);
+  border-radius:20px;
+  box-shadow:var(--q-shadow);
+}
+html.mv-page .heritage {overflow:hidden}
+html.mv-page .heritage:hover {box-shadow:0 24px 55px rgba(80,40,20,.17)}
+html.mv-page .field :is(input,select) {
+  color:var(--q-ink);
+  background:rgba(255,255,255,.90);
+  border:1.5px solid rgba(238,163,17,.36);
+  border-radius:13px;
+}
+html.mv-page .field :is(input,select):focus {border-color:var(--q-gold);box-shadow:0 0 0 4px rgba(241,180,60,.11)}
+html.mv-page .formula,
+html.mv-page .goal {
+  background:#fff7e9;
+  border:1px solid rgba(238,163,17,.34);
+  color:var(--q-dim);
+}
+html.mv-page .stat-line strong,
+html.mv-page .range-row output,
+html.mv-page .plan-output h3 {color:var(--q-gold-text)}
+html.mv-page .result-panel {
+  background:linear-gradient(145deg,#f9e1b5,#fff9ef 72%);
+  border:1.5px solid rgba(238,163,17,.45);
+  color:var(--q-ink);
+}
+html.mv-page .result-label,
+html.mv-page .unit,
+html.mv-page .tank-caption,
+html.mv-page .suggestions {color:var(--q-dim)}
+html.mv-page .big-number {color:#8a570c}
+html.mv-page .bar-track {background:rgba(60,32,24,.13)}
+html.mv-page .bar-item {color:var(--q-ink)}
+html.mv-page .journey-step {background:#fffaf3;border-color:var(--q-border)}
+html.mv-page .journey-step:hover,
+html.mv-page .journey-step.active {background:#fff0d0;border-color:var(--q-gold)}
+html.mv-page .journey-detail {
+  color:var(--q-ink);
+  background:linear-gradient(140deg,#f3dfc4,#fffaf3);
+  border:1px solid var(--q-border);
+}
+html.mv-page .journey-detail h3 {color:var(--q-gold-text)}
+html.mv-page .journey-detail p {color:var(--q-dim)}
+html.mv-page #journey {background:#f4ebe0!important}
+html.mv-page .atlas-ribbon {background:var(--q-wine);color:#fff5dc;border-color:rgba(241,180,60,.35)}
+html.mv-page .water-quote,
+html.mv-page .challenge-aside,
+html.mv-page .final-cta {
+  background:linear-gradient(140deg,#f4e4ce,#fff8eb);
+  border-top:1px solid rgba(238,163,17,.18);
+  border-bottom:1px solid rgba(238,163,17,.18);
+  color:var(--q-ink);
+}
+html.mv-page .water-quote blockquote em,
+html.mv-page .final-cta h2 em {color:var(--q-gold-text)}
+html.mv-page .water-quote small,
+html.mv-page .challenge-aside p,
+html.mv-page .final-cta p {color:var(--q-dim)}
+html.mv-page .chapter.light {color:var(--q-gold-text)}
+html.mv-page .impact-section {background:#f6f0e8}
+html.mv-page .impact-display {
+  background:linear-gradient(145deg,#efd6ad,#fff9ee);
+  color:var(--q-ink);
+  border:1px solid var(--q-border);
+  border-radius:20px;
+  box-shadow:var(--q-shadow);
+}
+html.mv-page .impact-big {color:#8a570c}
+html.mv-page .impact-display .impact-sub,
+html.mv-page .impact-counters small {color:var(--q-dim)}
+html.mv-page .impact-counters b {color:var(--q-ink)}
+html.mv-page .impact-counters>div {border-color:rgba(150,95,20,.22)}
+html.mv-page .season-tab {
+  color:var(--q-dim);
+  background:#fffaf3;
+  border-color:rgba(238,163,17,.4);
+}
+html.mv-page .season-tab[aria-selected=true],
+html.mv-page .season-tab:hover {background:var(--q-gold);color:var(--q-ink);border-color:var(--q-gold)}
+html.mv-page .season-stage {
+  background:#fffaf3;
+  border:1.5px solid var(--q-border);
+  border-radius:20px;
+  box-shadow:var(--q-shadow);
+  overflow:hidden;
+}
+html.mv-page .season-copy {color:var(--q-ink)}
+html.mv-page .season-copy p,
+html.mv-page .season-copy ul {color:var(--q-dim)}
+html.mv-page .season-copy li::marker {color:var(--q-gold-text)}
+html.mv-page .challenge-section {background:#f6f0e8}
+html.mv-page .challenge-aside {border-radius:20px}
+html.mv-page .challenge-aside .chapter {color:var(--q-gold-text)}
+html.mv-page .challenge-card {border-radius:20px}
+html.mv-page .quiz-answer {
+  color:var(--q-ink);
+  background:#fffaf3;
+  border-color:var(--q-border);
+  border-radius:14px;
+}
+html.mv-page .quiz-answer:hover:not(:disabled) {background:#fff1d6;border-color:var(--q-gold)}
+html.mv-page .quiz-answer.correct {background:#e7f3e5;color:#245638;border-color:#448f69}
+html.mv-page .quiz-answer.wrong {background:#fbe8e7;color:#8e3737;border-color:#c66e64}
+html.mv-page .quiz-progress i {background:linear-gradient(90deg,var(--q-gold),var(--q-gold2))}
+html.mv-page .quiz-next {
+  background:linear-gradient(135deg,var(--q-gold),var(--q-gold2));
+  color:var(--q-ink);
+  border-radius:99px;
+  font-weight:800;
+}
+html.mv-page .faq-section {background:#f4ebe0}
+html.mv-page .faq-stack summary:after {color:var(--q-gold-text)}
+html.mv-page .faq-stack p {color:var(--q-dim)}
+html.mv-page .site-footer,
+html.mv-page .footer {
+  background:#f0e6d9;
+  color:var(--q-dim);
+  border-top:1px solid var(--q-border);
+}
+html.mv-page .footer-grid h3,
+html.mv-page .footer .brand {color:var(--q-ink)}
+html.mv-page .footer-grid h3 em,
+html.mv-page .footer .brand em,
+html.mv-page .footer-grid h4 {color:var(--q-gold-text)}
+html.mv-page .footer-grid a,
+html.mv-page .footer-bottom {color:var(--q-dim)}
+html.mv-page .footer-grid a:hover {color:var(--q-gold-text)}
+html.mv-page .toast,
+html.mv-page .floating-top {
+  background:var(--q-p1);
+  color:var(--q-ink);
+  border:1px solid var(--q-border);
+  box-shadow:0 8px 24px rgba(80,40,20,.13);
+}
+html.mv-page .opening {
+  background:var(--q-bg);
+  color:var(--q-ink);
+}
+html.mv-page .opening-logo em {color:var(--q-gold-text)}
+/* Preset chips belong to the *light* result calculator now. */
+html.mv-page .preset-chip {
+  background:rgba(241,180,60,.10);
+  color:var(--q-ink);
+  border-color:rgba(238,163,17,.40);
+}
+html.mv-page .preset-chip:hover,
+html.mv-page .preset-chip:focus-visible {background:var(--q-gold);color:var(--q-ink)}
+
+/* Small screen parity with Quiz Arena ----------------------------------- */
+@media(max-width:800px) {
+  html.mv-page .nav.open {
+    background:rgba(247,242,234,.985);
+    border:1px solid var(--q-border);
+    box-shadow:0 14px 40px rgba(80,40,20,.15);
+  }
+  html.mv-page .nav.open a {color:var(--q-ink)}
+}
+@media(max-width:560px) {
+  html.mv-page .hero-bg {background-image:linear-gradient(90deg,#f6f0e8f8,#f6f0e8da),url('https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=1000&q=80')}
+}
+@media(prefers-reduced-motion:reduce){
+  html.mv-page :is(.btn,.tab,.chip,.feature,.recipe-card,.heritage) {transition:none!important}
+}
+

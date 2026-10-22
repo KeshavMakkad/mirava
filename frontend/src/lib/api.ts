@@ -48,6 +48,30 @@ export const http = {
   del: <T = void>(path: string) => request<T>('DELETE', path),
 }
 
+async function authHeader(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+async function uploadMedia(recipeId: string, mediaId: string, type: 'photo' | 'audio', blob: Blob): Promise<RecipeMedia> {
+  const res = await fetch(
+    `${BASE}/api/rasoi/recipes/${encodeURIComponent(recipeId)}/media/${encodeURIComponent(mediaId)}?type=${type}`,
+    { method: 'PUT', headers: { ...(await authHeader()), 'Content-Type': blob.type || 'application/octet-stream' }, body: blob },
+  )
+  const payload = await res.json().catch(() => null)
+  if (!res.ok) throw new ApiError(res.status, typeof payload?.detail === 'string' ? payload.detail : `Upload failed (${res.status})`)
+  return payload.media as RecipeMedia
+}
+
+async function fetchMediaUrl(recipeId: string, mediaId: string): Promise<string> {
+  const res = await fetch(`${BASE}/api/rasoi/recipes/${encodeURIComponent(recipeId)}/media/${encodeURIComponent(mediaId)}`, {
+    headers: await authHeader(),
+  })
+  if (!res.ok) throw new ApiError(res.status, `Could not load media (${res.status})`)
+  return URL.createObjectURL(await res.blob())
+}
+
 const qs = (params: Record<string, string | number | undefined | null>) => {
   const p = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') p.set(k, String(v))
@@ -74,8 +98,15 @@ export interface Profile {
   total_questions: number
   total_correct: number
   perfect_quizzes: number
+  bio: string
+  location: string
+  preferred_language: 'en' | 'hi'
+  /** Profile symbol shown on the avatar button. */
+  avatar: ProfileSymbol
   created_at: string
 }
+
+export type ProfileSymbol = 'lotus' | 'fort' | 'peacock' | 'chakra' | 'leaf' | 'sun'
 
 export interface Badge {
   badge_key: string
@@ -275,6 +306,11 @@ export interface NewsItem {
   category: string
   summary: string
   body: string | null
+  /** Optional Hindi versions; fall back to English when empty. */
+  title_hi: string | null
+  category_hi: string | null
+  summary_hi: string | null
+  body_hi: string | null
   image_url: string | null
   source_url: string | null
   published_at: string
@@ -287,6 +323,10 @@ export interface NewsIn {
   category?: string
   summary: string
   body?: string | null
+  title_hi?: string | null
+  category_hi?: string | null
+  summary_hi?: string | null
+  body_hi?: string | null
   image_url?: string | null
   source_url?: string | null
   published_at?: string | null
@@ -312,6 +352,41 @@ export interface Page<T> {
   items: T[]
 }
 
+/** A family recipe in the Rasoi Rescue vault (shape matches the legacy app). */
+export interface Recipe {
+  id: string
+  name: string
+  by: string
+  region: string
+  category: string
+  mins: number | null
+  lang: string
+  ingredients: string[]
+  steps: string[]
+  tips: string
+  story: string
+  transcript: string
+  notes: string
+  memory: string
+  visibility: 'private' | 'shared'
+  consent: boolean
+  /** Creation time in ms since epoch. */
+  created: number
+}
+
+export type RecipeIn = Omit<Recipe, 'created'> & { created?: number }
+
+/** Shared recipes visible to everyone (no private fields). */
+export type PublicRecipe = Pick<Recipe, 'id' | 'name' | 'by' | 'region' | 'category' | 'mins' | 'lang' | 'ingredients' | 'steps' | 'tips' | 'created'>
+
+export interface RecipeMedia {
+  mediaId: string
+  type: 'photo' | 'audio'
+  contentType: string
+  size: number
+  createdAt: string
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
@@ -322,7 +397,11 @@ export interface ChatMessage {
 export const api = {
   me: {
     get: () => http.get<Me>('/api/me'),
-    update: (body: Partial<Pick<Profile, 'display_name' | 'username' | 'avatar_url'>> & { role?: Exclude<Role, 'admin'> }) =>
+    update: (
+      body: Partial<Pick<Profile, 'display_name' | 'username' | 'avatar_url' | 'bio' | 'location' | 'preferred_language' | 'avatar'>> & {
+        role?: Exclude<Role, 'admin'>
+      },
+    ) =>
       http.patch<Profile>('/api/me', body),
     allState: () => http.get<Record<string, unknown>>('/api/me/state'),
     getState: <T = unknown>(key: string) =>
@@ -401,6 +480,36 @@ export const api = {
     users: (params: { search?: string; limit?: number; offset?: number }) =>
       http.get<Page<Profile>>(`/api/admin/users${qs(params)}`),
     setRole: (id: string, role: Role) => http.patch<Profile>(`/api/admin/users/${id}/role`, { role }),
+  },
+
+  rasoi: {
+    /** The signed-in user's private vault. */
+    list: () => http.get<{ recipes: Recipe[] }>('/api/rasoi/recipes').then((r) => r.recipes),
+    /** Create or update (upsert by id). Sharing (visibility 'shared' + consent) runs a server-side AI
+     * screen first; a 422 means "needs review" with the reason in the message, 503 means AI unavailable. */
+    save: (recipe: RecipeIn) => http.post<{ recipe: Recipe }>('/api/rasoi/recipes', recipe).then((r) => r.recipe),
+    remove: (id: string) => http.del(`/api/rasoi/recipes/${encodeURIComponent(id)}`),
+    /** Community recipes shared with consent (no sign-in needed). */
+    publicList: () => http.get<{ recipes: PublicRecipe[] }>('/api/rasoi/public').then((r) => r.recipes),
+    /** AI plausibility review of a draft recipe (advisory only). */
+    review: (body: { name: string; ingredients: string[]; steps: string[] }) =>
+      http.post<{ review: string; disclaimer: string }>('/api/rasoi/review', body),
+    media: {
+      list: (recipeId: string) =>
+        http.get<{ media: RecipeMedia[] }>(`/api/rasoi/recipes/${encodeURIComponent(recipeId)}/media`).then((r) => r.media),
+      /** Upload a photo (jpeg/png/webp ≤ 5MB) or audio clip (≤ 10MB). Returns the stored media row. */
+      upload: (recipeId: string, mediaId: string, type: 'photo' | 'audio', blob: Blob) =>
+        uploadMedia(recipeId, mediaId, type, blob),
+      /** Fetch private media bytes as an object URL (caller must URL.revokeObjectURL it). */
+      objectUrl: (recipeId: string, mediaId: string) => fetchMediaUrl(recipeId, mediaId),
+      remove: (recipeId: string, mediaId: string) =>
+        http.del(`/api/rasoi/recipes/${encodeURIComponent(recipeId)}/media/${encodeURIComponent(mediaId)}`),
+    },
+  },
+
+  sentinel: {
+    /** AI visual screening of a monument photo. `image` is a data: URL (jpeg/png/webp, ≤ 2.4MB). */
+    vision: (image: string) => http.post<{ assessment: string; advisory: string }>('/api/sentinel/vision', { image }),
   },
 
   ai: {

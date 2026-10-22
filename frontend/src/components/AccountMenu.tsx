@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { LanguageToggle } from './LanguageToggle'
+import { ProfileSymbolIcon } from './ProfileSymbol'
 
-/** Avatar button + dropdown with profile, classroom/admin links and sign out. */
+/**
+ * EN | हिंदी toggle + avatar button + dropdown with profile, classroom/admin
+ * links and sign out. Every page header renders this, so the language toggle
+ * is global. The avatar shows the profile symbol chosen on /profile.
+ */
 export function AccountMenu({ className }: { className?: string }) {
   const { me, user, isGuest, role, signOut } = useAuth()
   const [open, setOpen] = useState(false)
@@ -20,27 +26,40 @@ export function AccountMenu({ className }: { className?: string }) {
 
   if (!user) {
     return (
-      <Link className={['mv-account-btn', className].filter(Boolean).join(' ')} to="/login">
-        Sign in
-      </Link>
+      <div className={['mv-account', className].filter(Boolean).join(' ')}>
+        <LanguageToggle />
+        <Link className="mv-account-btn mv-account-signin" to="/login">
+          Sign in
+        </Link>
+      </div>
     )
   }
 
   const name = me?.profile.display_name || me?.profile.username || (isGuest ? 'Guest' : 'Explorer')
-  const initial = name.trim().charAt(0).toUpperCase() || 'M'
 
   return (
     <div className={['mv-account', className].filter(Boolean).join(' ')} ref={ref}>
-      <button type="button" className="mv-account-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <LanguageToggle />
+      <button
+        type="button"
+        className="mv-account-btn"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((o) => !o)}
+      >
         <span className="mv-avatar" aria-hidden>
-          {initial}
+          <ProfileSymbolIcon symbol={me?.profile.avatar} strokeWidth={3} />
         </span>
-        {name}
+        <span className="mv-account-name" translate="no">
+          {name}
+        </span>
       </button>
       {open && (
         <div className="mv-account-menu" role="menu">
-          <div className="mv-who">{name}</div>
-          <div className="mv-sub">{isGuest ? 'Guest session' : user.email}</div>
+          <div className="mv-who" translate="no">
+            {name}
+          </div>
+          {isGuest ? <div className="mv-sub">Guest session</div> : <div className="mv-sub" translate="no">{user.email}</div>}
           {me && (
             <div className="mv-stats">
               <span>✦ {me.profile.total_xp} XP</span>

@@ -2,6 +2,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import { useMemo, useState, type FormEvent } from 'react'
 import { useAuth } from '../../auth/AuthProvider'
 import { api, type Assignment, type BankQuestion, type Classroom } from '../../lib/api'
+import { locale, useLanguage } from '../../i18n'
 import { AssignModal } from './AssignModal'
 import { QuestionBank } from './QuestionBank'
 import { copyText, DAILY_LIMIT, errorMessage, MAX_QUESTIONS, medal, timeRemaining, useNow } from './util'
@@ -53,7 +54,7 @@ function AssignmentCard({
       {a.description && <div className="assign-desc">{a.description}</div>}
       <div className="assign-detail">
         <strong>Questions:</strong> {a.question_count} &nbsp;·&nbsp; <strong>Points:</strong> {a.max_points}
-        &nbsp;·&nbsp; <strong>Assigned:</strong> {new Date(a.created_at).toLocaleString()}
+        &nbsp;·&nbsp; <strong>Assigned:</strong> {new Date(a.created_at).toLocaleString(locale())}
         {a.status === 'assigned' && a.due_at && (
           <>
             {' '}
@@ -106,6 +107,7 @@ function AssignmentCard({
 }
 
 export function TeacherView({ toast }: { toast: (m: string) => void }) {
+  useLanguage() // re-render dates on language change
   const { me } = useAuth()
   const qc = useQueryClient()
   const now = useNow(1000)
@@ -368,7 +370,7 @@ export function TeacherView({ toast }: { toast: (m: string) => void }) {
                     <span className="who">
                       <strong>{m.display_name || m.username}</strong>
                       <small>
-                        @{m.username} · joined {new Date(m.joined_at).toLocaleDateString()}
+                        @{m.username} · joined {new Date(m.joined_at).toLocaleDateString(locale())}
                       </small>
                     </span>
                     <span className="xp">✦ {m.total_xp} XP</span>

@@ -18,6 +18,7 @@ const RasoiRescue = lazy(() => import('./pages/rasoi-rescue'))
 const VedicMaths = lazy(() => import('./pages/vedic-maths'))
 const Bhasha = lazy(() => import('./pages/bhasha'))
 const JalParampara = lazy(() => import('./pages/jal-parampara'))
+const ClassicGame = lazy(() => import('./pages/classic-game'))
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/apps/vedic-maths" element={<RequireAuth><VedicMaths /></RequireAuth>} />
         <Route path="/apps/bhasha" element={<RequireAuth><Bhasha /></RequireAuth>} />
         <Route path="/apps/jal-parampara" element={<RequireAuth><JalParampara /></RequireAuth>} />
+        <Route path="/apps/classic-game" element={<RequireAuth><ClassicGame /></RequireAuth>} />
 
         {/* Legacy .html URLs keep working. */}
         <Route path="/index.html" element={<Navigate to="/" replace />} />
@@ -57,6 +59,9 @@ export default function App() {
         <Route path="/vedicmaths.html" element={<Navigate to="/apps/vedic-maths" replace />} />
         <Route path="/Bhasha.html" element={<Navigate to="/apps/bhasha" replace />} />
         <Route path="/jalparampara.html" element={<Navigate to="/apps/jal-parampara" replace />} />
+        <Route path="/classic-game.html" element={<Navigate to="/apps/classic-game" replace />} />
+        <Route path="/profile.html" element={<Navigate to="/profile" replace />} />
+        <Route path="/admin.html" element={<Navigate to="/admin" replace />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

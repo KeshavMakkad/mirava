@@ -315,8 +315,8 @@ function Work() {
           ></textarea>
           <div className="qtags" id="qtags"></div>
           <small className="nfoot">
-            Printed on the ticket and included in the copied summary · <span id="nCount">0</span>/1200 · English
-            (Latin script) prints best in the PDF
+            Printed on the ticket and included in the copied summary · <span id="nCount">0</span>/1200 · Hindi and English
+            notes are supported in the PDF
           </small>
         </div>
 
@@ -333,6 +333,31 @@ function Work() {
           </button>
         </div>
       </div>
+    </section>
+  )
+}
+
+/** AI second opinion on an uploaded photo (vision model behind /api/sentinel/vision). Wired in vision.js. */
+function Vision() {
+  return (
+    <section id="sentinelVision" className="svision" aria-labelledby="sentinelVisionTitle">
+      <h2 id="sentinelVisionTitle">AI Monument &amp; Damage Screening</h2>
+      <p>
+        A second opinion using vision AI via the secured Mirava server. It will first check whether the photograph
+        appears to show a historical monument, then explain visible suspected cracks or damage and the reasons for a
+        minor/major assessment. Not a structural safety certification.
+      </p>
+      <label htmlFor="sentinelVisionImage">Upload monument photo (JPEG, PNG or WebP, under 2.4 MB)</label>
+      <input id="sentinelVisionImage" type="file" accept="image/jpeg,image/png,image/webp" />
+      <div className="svision-row">
+        <img id="sentinelVisionPreview" alt="Selected photo preview" hidden />
+        <button id="sentinelVisionRun" className="btn red" type="button">
+          Review with vision AI ↗
+        </button>
+      </div>
+      <p id="sentinelVisionStatus" className="svision-status" role="status" aria-live="polite"></p>
+      <pre id="sentinelVisionResult" className="svision-result" translate="no" data-i18n-skip="" hidden></pre>
+      <p id="sentinelVisionAdvisory" className="svision-advisory" hidden></p>
     </section>
   )
 }
@@ -507,6 +532,7 @@ export const SentinelMarkup = memo(function SentinelMarkup() {
         <Panel />
         <Work />
       </main>
+      <Vision />
       <Footer />
       <Overlays />
     </>

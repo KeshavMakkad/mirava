@@ -1,13 +1,19 @@
 /**
- * Rasoi Rescue — imperative engine ported from legacy rasoi-rescue.html.
+ * Rasoi Rescue — imperative engine ported from new/public/rasoi-rescue.html.
  * A small hash-routed app (#/, #/cookbook[/id], #/cook/id, #/record, #/vault)
  * rendered into the `main#app` element inside `root`. The header, footer and
  * toast markup are React (see index.tsx).
  *
- * Storage: bookmarks / cooked marks / last page → account state `rasoiFavourites`
- * (via ctx.loadState/saveState). Family recipes with their audio & photo blobs
- * stay in this browser's IndexedDB (binary media is too large for the state API).
+ * Storage:
+ *  - Family recipes live in the server vault (api.rasoi.*), with photo/audio
+ *    attachments in private server storage (api.rasoi.media.*). Sharing a recipe
+ *    publicly needs consent and passes a server-side AI screen.
+ *  - This browser's IndexedDB keeps a device copy (recipes + media blobs) so
+ *    nothing is lost while offline; pending copies sync on the next visit.
+ *  - Bookmarks / cooked marks / last open recipe → account state `rasoiFavourites`.
  */
+import { api, ApiError } from '../../lib/api'
+import { supabase } from '../../lib/supabase'
 import { SEED } from './data.js'
 
 /**
@@ -17,21 +23,24 @@ import { SEED } from './data.js'
 export function initRasoi(root, ctx) {
 /** @type {Array<() => void>} */
 const cleanups = [];
+let disposed = false;
 
 // ----------------------------------------------------------
 // DATA LAYER
 // ----------------------------------------------------------
-let disposed = false;
 const $ = (s, scope = root) => scope.querySelector(s);
 const $$ = (s, scope = root) => Array.from(scope.querySelectorAll(s));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 }[c]));
+/** translate="no" for user-generated recipe content (seed recipes stay translatable). */
+const raw = r => r.demo ? '' : 'translate="no"';
 
 let toastTimer = 0;
 const toast = t => {
   if (disposed) return;
   const el = $('#toast');
+  if (!el) return;
   el.textContent = t;
   el.classList.add('show');
   clearTimeout(toastTimer);
@@ -42,8 +51,18 @@ let db = null;
 const memory = { recipes: {}, blobs: {} };
 let cache = [];
 let urls = [];
+/** Object URLs for server-stored media, keyed `${recipeId}/${mediaId}` (kept across renders). */
+const remoteURLs = new Map();
+/** Server media listings per recipe (invalidated after uploads). */
+const mediaIndex = new Map();
 const regions = [...new Set(SEED.map(r => r.region))].sort();
 let filters = { q: '', region: '', category: '', kind: 'all' };
+const vaultSync = { signedIn: false, online: navigator.onLine !== false, error: '' };
+let currentUid = '';
+
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const PHOTO_MAX = 5 * 1024 * 1024;
+const AUDIO_MAX = 10 * 1024 * 1024;
 
 const state = {
   recorder: null,
@@ -62,7 +81,7 @@ const state = {
   checked: new Set()
 };
 
-// IndexedDB helpers
+// IndexedDB helpers (device copy)
 function openDB() {
   return new Promise(resolve => {
     try {
@@ -75,7 +94,7 @@ function openDB() {
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => resolve(null);
-    } catch (e) { resolve(null); }
+    } catch { resolve(null); }
   });
 }
 
@@ -108,35 +127,294 @@ const remove = (s, key) => op(s, 'readwrite', { type: 'delete', key });
 async function blobURL(id) {
   if (!id) return '';
   const v = await get('blobs', id);
-  if (!v) return '';
+  if (!v?.blob) return '';
   const url = URL.createObjectURL(v.blob);
   urls.push(url);
   return url;
 }
 
+// Ingredients are {q, n} in the UI and "q | n" strings on the server.
+const parseLine = s => {
+  const a = String(s).split('|');
+  return { q: a.length > 1 ? a.shift().trim() : '', n: a.join('|').trim() || String(s).trim() };
+};
+const ingText = i => typeof i === 'string' ? i : (i?.q ? `${i.q} | ${i.n || ''}` : (i?.n || ''));
+const ingList = list => (Array.isArray(list) ? list : []).map(i => typeof i === 'string' ? parseLine(i) : { q: i?.q || '', n: i?.n || '' });
+
+/** Strip device-only fields: what the server vault stores. */
+function databasePayload(recipe) {
+  const mins = Number(recipe.mins);
+  const shared = recipe.visibility === 'shared';
+  return {
+    id: recipe.id,
+    name: recipe.name,
+    by: recipe.by,
+    region: recipe.region || 'Family kitchen',
+    category: recipe.category || 'Main Course',
+    mins: Number.isInteger(mins) && mins >= 1 && mins <= 10000 ? mins : null,
+    lang: recipe.lang || 'English',
+    ingredients: (recipe.ingredients || []).map(ingText).filter(Boolean),
+    steps: (recipe.steps || []).filter(Boolean),
+    tips: recipe.tips || '',
+    story: recipe.story || '',
+    transcript: recipe.transcript || '',
+    notes: recipe.notes || '',
+    memory: recipe.memory || '',
+    visibility: shared ? 'shared' : 'private',
+    consent: shared && !!recipe.consent,
+    created: recipe.created || Date.now()
+  };
+}
+
+/** Run an API call, tracking connectivity like the Worker's vaultRequest(). */
+async function vaultCall(fn) {
+  try {
+    const value = await fn();
+    vaultSync.online = true;
+    vaultSync.signedIn = true;
+    vaultSync.error = '';
+    return { ok: true, status: 200, value, message: '' };
+  } catch (err) {
+    if (err instanceof ApiError) {
+      vaultSync.online = true;
+      if (err.status === 401) {
+        vaultSync.signedIn = false;
+        vaultSync.error = '';
+      }
+      return { ok: false, status: err.status, value: null, message: err.message || `Database request failed (${err.status})` };
+    }
+    vaultSync.online = false;
+    vaultSync.error = 'Database is temporarily unreachable. Your device copy is still available.';
+    return { ok: false, status: 0, value: null, message: vaultSync.error };
+  }
+}
+
+const fromRemote = (remoteRecipe, local) => ({
+  ...remoteRecipe,
+  ingredients: ingList(remoteRecipe.ingredients),
+  ...(local?.audioId ? { audioId: local.audioId } : {}),
+  ...(local?.photoId ? { photoId: local.photoId } : {}),
+  pendingMedia: local?.pendingMedia || [],
+  owner: currentUid,
+  databaseSynced: true,
+  pendingSync: false,
+  demo: false
+});
+
+const upsertDatabaseRecipe = recipe => vaultCall(() => api.rasoi.save(databasePayload(recipe)));
+
+/** Upload this recipe's not-yet-backed-up photo/audio blobs to server storage. */
+async function uploadRecipeMedia(recipe) {
+  if (!recipe?.databaseSynced || !vaultSync.signedIn || !recipe.pendingMedia?.length) return recipe;
+  const still = [];
+  for (const mediaId of recipe.pendingMedia) {
+    const type = mediaId.endsWith('-photo') ? 'photo' : 'audio';
+    const local = await get('blobs', mediaId);
+    if (!local?.blob) continue;
+    try {
+      await api.rasoi.media.upload(recipe.id, mediaId, type, local.blob);
+      mediaIndex.delete(recipe.id);
+      const key = recipe.id + '/' + mediaId;
+      if (remoteURLs.has(key)) { URL.revokeObjectURL(remoteURLs.get(key)); remoteURLs.delete(key); }
+    } catch (err) {
+      if (err instanceof ApiError && [400, 409, 413, 415].includes(err.status)) {
+        // Permanent rejection: keep the device copy, stop retrying.
+        toast('Could not back up the recipe ' + type + ': ' + err.message);
+      } else {
+        // Keep the browser copy for a later retry; never silently discard it.
+        console.warn('Recipe ' + type + ' backup is pending.');
+        still.push(mediaId);
+      }
+    }
+  }
+  const updated = { ...recipe, pendingMedia: still };
+  await put('recipes', updated);
+  return updated;
+}
+
+async function remoteMediaURL(recipeId, mediaId) {
+  if (!recipeId || !mediaId || !vaultSync.signedIn) return '';
+  const key = recipeId + '/' + mediaId;
+  if (remoteURLs.has(key)) return remoteURLs.get(key);
+  try {
+    const u = await api.rasoi.media.objectUrl(recipeId, mediaId);
+    if (disposed) { URL.revokeObjectURL(u); return ''; }
+    remoteURLs.set(key, u);
+    return u;
+  } catch { return ''; }
+}
+
+async function recipeMediaURL(recipe, type) {
+  const mediaId = type === 'photo' ? recipe.photoId : recipe.audioId;
+  if (!mediaId || recipe.demo) return '';
+  return await blobURL(mediaId) || (recipe.databaseSynced ? await remoteMediaURL(recipe.id, mediaId) : '');
+}
+
+async function listRemoteMedia(recipeId) {
+  if (mediaIndex.has(recipeId)) return mediaIndex.get(recipeId);
+  try {
+    const media = await api.rasoi.media.list(recipeId);
+    mediaIndex.set(recipeId, media);
+    return media;
+  } catch { return []; }
+}
+
+async function sessionUid() {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.user?.id || '';
+  } catch { return ''; }
+}
+
 async function refresh() {
-  const mine = (await all('recipes')).sort((a, b) => b.created - a.created);
+  currentUid = await sessionUid();
+  // Device copies belong to whoever saved them; unowned ones were made while signed out.
+  const local = (await all('recipes')).filter(r => !r.owner || r.owner === currentUid);
+  const localMap = new Map(local.map(r => [r.id, r]));
+  const listed = await vaultCall(() => api.rasoi.list());
+  const remote = listed.ok ? listed.value : null;
+  const remoteMap = new Map(Array.isArray(remote) ? remote.map(r => [r.id, r]) : []);
+
+  // If recipes were created/edited while offline or signed out, push those
+  // pending device copies into the vault as soon as it is reachable again.
+  if (Array.isArray(remote) && vaultSync.signedIn) {
+    for (const pending of local.filter(r => r.pendingSync)) {
+      let res = await upsertDatabaseRecipe(pending);
+      if (!res.ok && pending.visibility === 'shared' && [422, 429, 503].includes(res.status)) {
+        // Public sharing was refused by the AI screen: keep it as a private draft instead.
+        const reason = res.message;
+        res = await upsertDatabaseRecipe({ ...pending, visibility: 'private', consent: false });
+        if (res.ok) toast('Saved privately — ' + reason);
+      }
+      if (!res.ok) continue;
+      const merged = await uploadRecipeMedia(fromRemote(res.value, pending));
+      await put('recipes', merged);
+      localMap.set(merged.id, merged);
+      remoteMap.set(merged.id, res.value);
+    }
+  }
+
+  const mine = [];
+  if (Array.isArray(remote)) {
+    for (const remoteRecipe of remoteMap.values()) {
+      const localRecipe = localMap.get(remoteRecipe.id);
+      if (localRecipe?.pendingSync) {
+        mine.push(localRecipe);
+        continue;
+      }
+      const media = await listRemoteMedia(remoteRecipe.id);
+      const remoteAudio = media.find(x => x.type === 'audio')?.mediaId;
+      const remotePhoto = media.find(x => x.type === 'photo')?.mediaId;
+      let merged = fromRemote(remoteRecipe, {
+        ...localRecipe,
+        audioId: remoteAudio || localRecipe?.audioId,
+        photoId: remotePhoto || localRecipe?.photoId
+      });
+      if (merged.pendingMedia.length) merged = await uploadRecipeMedia(merged);
+      else await put('recipes', merged);
+      localMap.set(merged.id, merged);
+      mine.push(merged);
+    }
+    for (const localRecipe of localMap.values()) {
+      if (!remoteMap.has(localRecipe.id)) mine.push(localRecipe);
+    }
+  } else {
+    mine.push(...localMap.values());
+  }
+
+  mine.sort((a, b) => b.created - a.created);
   cache = [...mine, ...SEED];
-  for (const r of cache) {
-    if (r.photoId) r.photoURL = await blobURL(r.photoId);
+  for (const r of mine) {
+    r.photoURL = r.photoId ? await recipeMediaURL(r, 'photo') : '';
   }
 }
 
 // ----------------------------------------------------------
-// PHOTO LIBRARY
+// PHOTO LIBRARY — USER-SUPPLIED PHOTOS + RELIABLE LOCAL FALLBACK
 // ----------------------------------------------------------
-const photoFor = r => {
-  const pics = {
-    'Dessert': 'photo-1488477181946-6428a0291777',
-    'Breakfast': 'photo-1533089860892-a7c6f0a88666',
-    'Snack': 'photo-1601050690597-df0568f70950',
-    'Bread': 'photo-1509440159596-0249088772ff',
-    'Drink': 'photo-1544787219-7f47ccb76574',
-    'Side': 'photo-1547592180-85f173990554',
-    'Main Course': 'photo-1546833999-b9f581a1996d'
-  };
-  return 'https://images.unsplash.com/' + (pics[r.category] || pics['Main Course']) + '?auto=format&fit=crop&w=650&q=75';
+const recipeLocalPhotos = {
+  'Rajma Masala': 'rajma masala.jpg',
+  'Sarson da Saag': 'sarson da saag.jpg',
+  'Makki di Roti': 'makki ki roti.jpg',
+  'Amritsari Kulcha': 'amritsari kulcha.jpg',
+  'Chole Bhature': 'chole bhature.jpg',
+  'Kadhi Pakora': 'kadhi pakora.jpg',
+  'Pinni': 'PINNI.jpg',
+  'Dal Makhani': 'DAL MAKHANI.jpg',
+  'Gatte ki Sabzi': 'GATTE KI SABZI.jpg',
+  'Gatte Ki Sabzi': 'GATTE KI SABZI.jpg',
+  'Dal Baati Churma': 'DAL BATI CHURMA.jpg',
+  'Ghevar': 'GHEVAR.jpg',
+  'Besan Ladoo': 'BESAN LADOO.jpg',
+  'Pyaaz Kachori': 'PYAAZ KACHORI.jpg',
+  'Dhokla': 'DHOKLA.jpg',
+  'Thepla': 'THEPLAjpg.jpg',
+  'Handvo': 'HANDVO.jpg',
+  'Khandvi': 'KHANDVI.jpg',
+  'Shrikhand': 'SHRIKHAND.jpg',
+  'Dal Dhokli': 'DAL DHOKLI.jpg',
+  'Misal Pav': 'MISAL PAV.jpg',
+  'Sabudana Khichdi': 'SABUDANA KHICHDI.jpg',
+  'Modak': 'MODAK.jpg',
+  'Poha': 'POHA.jpg',
+  'Masala Dosa': 'MASALA DOSA.jpg',
+  'Bisi Bele Bath': 'Bisi Bele Bath.jpg',
+  'Mysore Pak': 'mysore pak.jpg',
+  'Ragi Mudde': 'raggi mude.jpg',
+  'Neer Dosa': 'neer dosa.jpg',
+  'Akki Roti': 'akki roti.jpg',
+  'Sambar': 'sambar.jpg',
+  'Rasam': 'rasam.jpg',
+  'Pongal': 'pongal.jpg',
+  'Ven Pongal': 'pongal.jpg',
+  'Chettinad Kuzhambu': 'Chettinad Kuzhambu.jpg',
+  'Adai': 'adai.jpg',
+  'Payasam': 'Payasam.jpg',
+  'Appam': 'Appam.jpg',
+  'Avial': 'Avial.jpg',
+  'Puttu Kadala': 'Puttu Kadala .jpg',
+  'Ada Pradhaman': '_Ada Pradhaman .jpg',
+  'Erissery': 'Erissery.jpg',
+  'Pesarattu': 'Pesarattu.jpg',
+  'Pulihora': 'Pulihora .jpg',
+  'Hyderabadi Biryani': 'Hyderabadi Biryani.jpg',
+  'Bagara Baingan': '_Bagara Baingan.jpg',
+  'Jhalmuri': 'Jhalmuri .jpg',
+  'Shorshe Ilish': 'Shorshe Ilish.jpg',
+  'Mishti Doi': 'Mishti Doi.jpg',
+  'Luchi Aloo Dum': 'Luchi Aloo Dum .jpg',
+  'Luchi': 'Luchi Aloo Dum .jpg',
+  'Chingri Malai Curry': 'chingri malai curry.jpg',
 };
+
+const recipeCategoryPhotos = {
+  'Dessert': 'photo-1488477181946-6428a0291777',
+  'Breakfast': 'photo-1533089860892-a7c6f0a88666',
+  'Snack': 'photo-1601050690597-df0568f70950',
+  'Bread': 'photo-1509440159596-0249088772ff',
+  'Drink': 'photo-1544787219-7f47ccb76574',
+  'Side': 'photo-1547592180-85f173990554',
+  'Main Course': 'photo-1546833999-b9f581a1996d'
+};
+
+const categoryPhotoFor = r =>
+  'https://images.unsplash.com/' + (recipeCategoryPhotos[r.category] || recipeCategoryPhotos['Main Course']) + '?auto=format&fit=crop&w=650&q=80';
+
+/** Bundled recipe photo (public/images), else a representative category photo. */
+const photoFor = r => {
+  const localFile = recipeLocalPhotos[r.name];
+  return localFile ? '/images/' + encodeURIComponent(localFile) : categoryPhotoFor(r);
+};
+
+// Broken image → swap to the category photo once (replaces inline onerror=).
+const onImgError = e => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !img.dataset.fallback || img.dataset.fellBack) return;
+  img.dataset.fellBack = '1';
+  img.src = img.dataset.fallback;
+};
+root.addEventListener('error', onImgError, true);
+cleanups.push(() => root.removeEventListener('error', onImgError, true));
 
 // ----------------------------------------------------------
 // RENDER: HOME
@@ -150,8 +428,8 @@ function hero() {
           <h1>Every recipe<br>has a <em>story.</em></h1>
           <p class="hero-copy">Save the dishes you grew up with. Keep the original voice, the handwritten wisdom, and the memories behind every family meal.</p>
           <div class="actions">
-            <a class="btn primary" href="#/cookbook">${bookIcon('book')} Open the recipe book &rarr;</a>
-            <a class="btn secondary" href="#/record">Preserve a family recipe &rarr;</a>
+            <a class="btn primary" href="#/record">✦ Preserve a memory ↗</a>
+            <a class="btn secondary" href="#/cookbook">Explore the cookbook →</a>
           </div>
           <div class="hero-stats">
             <div><strong>${SEED.length}+</strong><span>regional dishes to explore</span></div>
@@ -166,7 +444,6 @@ function hero() {
         </div>
       </div>
     </section>
-
   `;
 }
 
@@ -174,18 +451,18 @@ function card(r) {
   return `
     <article class="recipe-card">
       <div class="recipe-image">
-        <img loading="lazy" src="${esc(r.photoURL || photoFor(r))}" alt="Food photograph representing ${esc(r.name)}">
+        <img loading="lazy" decoding="async" src="${esc(r.photoURL || photoFor(r))}" data-fallback="${esc(categoryPhotoFor(r))}" alt="Food photograph representing ${esc(r.name)}" title="${esc(r.name)}">
         <span class="tag">${r.demo ? '✦ Regional collection' : '♥ Family recipe'}</span>
       </div>
       <div class="recipe-body">
-        <div class="eyebrow" style="font-size:9px">${esc(r.region)}</div>
-        <h3>${esc(r.name)}</h3>
-        <p>${esc(r.category || 'Family recipe')} · ${esc(r.by)}</p>
+        <div class="eyebrow" style="font-size:9px"><span ${raw(r)}>${esc(r.region)}</span></div>
+        <h3 ${raw(r)}>${esc(r.name)}</h3>
+        <p>${esc(r.category || 'Family recipe')} · <span ${raw(r)}>${esc(r.by)}</span></p>
         <div class="card-foot">
           <span>◷ ${r.mins || '?'} min</span>
           <span>${r.audioId ? '♫ Voice saved' : '✧ ' + (r.demo ? 'Sample' : 'No voice')}</span>
         </div>
-        <a href="#/cookbook/${encodeURIComponent(r.id)}" class="btn dark small">Read in the book &rarr;</a>
+        <a href="#/cook/${encodeURIComponent(r.id)}" class="btn dark small">View recipe ↗</a>
       </div>
     </article>
   `;
@@ -238,519 +515,459 @@ function home() {
     </section>
     <section class="section">
       <div class="wrap">
-        ${bookInvitation()}
+        <div class="eyebrow">Discover India on a plate</div>
+        <div class="section-head">
+          <h2>A thousand flavours.<br>One shared heritage.</h2>
+          <a href="#/cookbook" class="btn dark">Browse all ${SEED.length} recipes →</a>
+        </div>
+        <div class="recipe-grid">
+          ${SEED.slice(0, 8).map(card).join('')}
+        </div>
       </div>
     </section>
   `;
 }
 
 // ----------------------------------------------------------
-// RENDER: COOKBOOK
-// ----------------------------------------------------------
-// ----------------------------------------------------------
-// THE LIVING RECIPE BOOK
-// A dependency-free reader over the EXISTING recipe cache.
-// Bookmarks/cooked marks/reading position: Mirava account state
-// (key `rasoiFavourites`). Family recipes and their media: IndexedDB.
+// BOOKMARKS & COOKED MARKS (account state `rasoiFavourites`)
 // ----------------------------------------------------------
 const STATE_KEY = 'rasoiFavourites';
+const favourites = { saved: new Set(), cooked: new Set(), last: '' };
 let saveTimer = 0;
-// Debounced write of bookmarks, cooked marks and the last open page.
-function bookPersist() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    ctx.saveState(STATE_KEY, { bookmarks: [...book.saved], cooked: [...book.cooked], last: book.activeId || '' });
-  }, 600);
-  return !!ctx.me;
+function favouritesPayload() {
+  return { bookmarks: [...favourites.saved], cooked: [...favourites.cooked], last: favourites.last || '' };
 }
-async function bookLoadState() {
+function persistFavourites() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { saveTimer = 0; ctx.saveState(STATE_KEY, favouritesPayload()); }, 600);
+}
+async function loadFavourites() {
   const v = await ctx.loadState(STATE_KEY);
   if (!v || typeof v !== 'object') return;
   const strings = a => Array.isArray(a) ? a.filter(x => typeof x === 'string') : [];
-  book.saved = new Set(strings(v.bookmarks));
-  book.cooked = new Set(strings(v.cooked));
-  if (typeof v.last === 'string') book.activeId = v.last;
-}
-const book = {
-  found: [], index: 0, activeId: '',
-  saved: new Set(),
-  cooked: new Set(),
-  checked: new Map(), cover: false, animation: null, controller: null,
-  mediaURL: '', mediaToken: 0, previousOverflow: '', touch: null
-};
-const bookCategories = [
-  ['', 'All pages'], ['Main Course', 'Mains'], ['Breakfast', 'Breakfast'],
-  ['Bread', 'Breads'], ['Snack', 'Snacks'], ['Dessert', 'Sweets'],
-  ['Side', 'Sides'], ['Drink', 'Drinks']
-];
-const bookIcons = {
-  book: '<path d="M12 5c-3-2-7-2-10-1v15c3-1 7-1 10 1 3-2 7-2 10-1V4c-3-1-7-1-10 1Z"/><path d="M12 5v15M5 8h4M15 8h4M5 11h4M15 11h4"/>',
-  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
-  bookmark: '<path d="M6 3h12v19l-6-4-6 4Z"/>',
-  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-  left: '<path d="m14 6-6 6 6 6M8 12h13"/>',
-  right: '<path d="m10 6 6 6-6 6M3 12h13"/>',
-  close: '<path d="m6 6 12 12M6 18 18 6"/>',
-  list: '<path d="M8 5h13M8 12h13M8 19h13M3 5h.01M3 12h.01M3 19h.01"/>',
-  pot: '<path d="M5 10h14v6a5 5 0 0 1-5 5h-4a5 5 0 0 1-5-5ZM3 10h18M2 12v3h3M19 12h3v3h-3M8 6c-3-2 2-3 0-5M13 7c-3-2 2-3 0-5M17 6c-2-1 2-2 0-4"/>',
-  star: '<path d="m12 2 2.6 6.9L22 12l-7.4 3.1L12 22l-2.6-6.9L2 12l7.4-3.1Z"/>',
-  check: '<path d="m5 12 4 4L19 6"/>',
-  voice: '<path d="M4 9v6M8 5v14M12 2v20M16 6v12M20 9v6"/>',
-  leaf: '<path d="M19 3c-8 0-14 3-14 10a6 6 0 0 0 6 6c7 0 8-8 8-16ZM4 21 15 9M9 16V9M9 16h6"/>'
-};
-const bookIcon = name => `<svg class="rrb-icon" viewBox="0 0 24 24" aria-hidden="true">${bookIcons[name] || bookIcons.book}</svg>`;
-const bookNumber = n => String(n).padStart(3, '0');
-const bookPage = r => Math.max(0, cache.findIndex(x => x.id === r.id)) * 2 + 1;
-const bookSearchText = r => [r.name, r.region, r.category, r.by, ...(r.ingredients || []).map(i => i.n)].join(' ').toLowerCase();
-
-function bookCover(home = false) {
-  const opening = home
-    ? '<a class="rrb-cover" href="#/cookbook" aria-label="Open the Rasoi Rescue recipe book">'
-    : '<button type="button" class="rrb-cover" data-book-action="open" aria-label="Open the Rasoi Rescue recipe book">';
-  return `${opening}
-    <span class="rrb-cover-edition">The living cookbook &middot; Vol. I</span>
-    <span class="rrb-cover-title">Rasoi<em>Rescue</em></span>
-    <span class="rrb-cover-subtitle">Recipes that remember.</span>
-    <svg class="rrb-cover-ornament" viewBox="0 0 100 90" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
-      <path d="M50 83V15M50 68C29 69 21 54 19 44c21 0 29 13 31 24ZM50 68c21 1 29-14 31-24-21 0-29 13-31 24ZM50 48C34 46 28 32 28 23c17 3 22 17 22 25ZM50 48c16-2 22-16 22-25-17 3-22 17-22 25ZM50 29c-12-9-8-21 0-27 8 6 12 18 0 27ZM32 82h36"/>
-      <path d="m10 23 3 5 5 3-5 3-3 5-3-5-5-3 5-3Zm78 42 2 4 5 2-5 2-2 4-2-4-4-2 4-2Z" stroke-width=".8"/>
-    </svg>
-    <span class="rrb-cover-line"></span>
-    <span class="rrb-cover-bottom">${SEED.length} regional recipes<br>A lifetime of family stories</span>
-    <span class="rrb-cover-open">Open the book ${bookIcon('right')}</span>
-  ${home ? '</a>' : '</button>'}`;
+  favourites.saved = new Set(strings(v.bookmarks));
+  favourites.cooked = new Set(strings(v.cooked));
+  if (typeof v.last === 'string') favourites.last = v.last;
 }
 
-function bookInvitation() {
-  return `<div class="rrb-invitation">
-    <div>
-      <div class="eyebrow">A new chapter for old favourites</div>
-      <h2>Not just recipes.<br>A book of <em>memories.</em></h2>
-      <p>Turn a page and find your next family favourite. Ingredients on one side, the method on the other &mdash; just like the cookbook in your kitchen.</p>
-      <a class="btn dark" href="#/cookbook">${bookIcon('book')} Open the recipe book &rarr;</a>
-      <div class="rrb-invitation-meta">
-        <div><b>${SEED.length}</b><span>Regional recipes</span></div>
-        <div><b>${regions.length}</b><span>Culinary regions</span></div>
-        <div><b>Yours</b><span>Family pages</span></div>
-      </div>
-    </div>
-    <div class="rrb-cover-scene">${bookCover(true)}</div>
-  </div>`;
-}
-
+// ----------------------------------------------------------
+// RENDER: COOKBOOK — PHYSICAL BOOK EXPERIENCE
+// ----------------------------------------------------------
 function cookbook() {
-  const allRegions = [...new Set(cache.map(r => r.region))].sort();
   return `
-    <section class="rrb-book-section" aria-labelledby="rrb-heading">
+    <section class="section cookbook-stage">
       <div class="wrap">
-        <div class="rrb-heading">
-          <div>
-            <div class="eyebrow">The living cookbook</div>
-            <h2 id="rrb-heading">A little taste of <em>home.</em></h2>
-            <p>Turn the pages. Rediscover a favourite. Keep the story alive.</p>
-          </div>
-          <div class="rrb-volume">${bookIcon('book')}<div><b>Recipes that remember.</b><span>${SEED.length} regional recipes &middot; ${regions.length} regions</span></div></div>
+        <div class="cookbook-intro">
+          <div class="eyebrow">The living cookbook</div>
+          <h2>Open the book.<br><em>Turn the pages.</em></h2>
+          <p class="muted">A hardbound digital cookbook with ${SEED.length} regional recipes and your own saved family recipes.</p>
         </div>
-        <div class="rrb-toolbar" role="search" aria-label="Search and filter the recipe book">
-          <button class="rrb-tool rrb-contents-toggle" type="button" data-book-action="contents" aria-haspopup="dialog">${bookIcon('list')} Contents</button>
-          <label class="rrb-search">${bookIcon('search')}<span class="rrb-sr">Search recipes, ingredients or regions</span><input id="rrb-search" type="search" autocomplete="off" placeholder="Find a recipe or ingredient..." value="${esc(filters.q)}"></label>
-          <label class="rrb-region-label"><span class="rrb-sr">Filter by region</span><select class="rrb-select" id="rrb-region"><option value="">Every region</option>${allRegions.map(r => `<option value="${esc(r)}" ${filters.region === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
-          <label class="rrb-collection-label"><span class="rrb-sr">Choose a recipe collection</span><select class="rrb-select" id="rrb-collection">${[['all','The whole collection'],['sample','Regional recipes'],['mine','My family pages'],['bookmarked','My bookmarks'],['voice','With original voice']].map(([v,t]) => `<option value="${v}" ${filters.kind === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-          <button class="rrb-tool rrb-cover-toggle" type="button" data-book-action="cover" aria-label="Show the book cover" title="Show the book cover">${bookIcon('book')}<span>Cover</span></button>
-        </div>
-        <div class="rrb-statusbar">
-          <span id="rrb-count" class="rrb-count"></span>
-          <div class="rrb-status-right"><span id="rrb-saved-count"></span><button class="rrb-quiet" type="button" id="rrb-clear" data-book-action="clear" hidden>Clear filters</button></div>
-        </div>
-        <div class="rrb-tabs" role="group" aria-label="Recipe chapters">
-          ${bookCategories.map(([v,t]) => `<button class="rrb-tab ${filters.category === v ? 'active' : ''}" type="button" data-book-category="${v}" aria-pressed="${filters.category === v}">${t}</button>`).join('')}
-        </div>
-        <div class="rrb-desk" id="rrb-desk">
-          <div id="rrb-host" style="scroll-margin-top:92px"></div>
-          <div class="rrb-controls" id="rrb-controls" aria-label="Turn cookbook pages">
-            <button class="rrb-turn-button" type="button" id="rrb-prev" data-book-action="previous" aria-label="Previous recipe">${bookIcon('left')}<span><small>Previous recipe</small><b id="rrb-prev-title"></b></span></button>
-            <div class="rrb-pagination">
-              <label for="rrb-page-input">Recipe <input id="rrb-page-input" type="number" min="1" step="1" inputmode="numeric" aria-label="Jump to recipe number"> of <span id="rrb-total"></span></label>
-              <div class="rrb-progress-track" aria-hidden="true"><div id="rrb-reading-progress"></div></div>
-              <p id="rrb-folios"></p>
+
+        <div class="book-filter-panel">
+          <div class="searchbar">
+            <div class="field">
+              <label for="search">Search recipes, ingredients, regions</label>
+              <input id="search" type="search" placeholder="Try rajma, sambar, Gujarat…" value="${esc(filters.q)}">
             </div>
-            <button class="rrb-turn-button" type="button" id="rrb-next" data-book-action="next" aria-label="Next recipe"><span><small>Next recipe</small><b id="rrb-next-title"></b></span>${bookIcon('right')}</button>
-          </div>
-        </div>
-        <p class="rrb-book-note">${bookIcon('leaf')} Made to be used, loved and passed on. Bookmarks are kept with your Mirava account.</p>
-        <p class="rrb-sr" id="rrb-live" role="status" aria-live="polite" aria-atomic="true"></p>
-        <dialog class="rrb-index" id="rrb-index" aria-labelledby="rrb-index-heading">
-          <div class="rrb-index-shell">
-            <div class="rrb-index-head">
-              <div class="rrb-index-title"><div><p>Find your next favourite</p><h3 id="rrb-index-heading">The contents.</h3></div><button type="button" data-book-action="close-index" aria-label="Close contents">${bookIcon('close')}</button></div>
-              <label class="rrb-search">${bookIcon('search')}<span class="rrb-sr">Search all cookbook contents</span><input id="rrb-index-search" type="search" placeholder="Search all chapters..." autocomplete="off"></label>
+            <div class="field">
+              <label for="region">Region</label>
+              <select id="region">
+                <option value="">All regions</option>
+                ${regions.map(x => `<option ${filters.region === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}
+              </select>
             </div>
-            <div class="rrb-index-body" id="rrb-index-body"></div>
-            <div class="rrb-index-foot" id="rrb-index-count"></div>
+            <div class="field">
+              <label for="category">Category</label>
+              <select id="category">
+                <option value="">All categories</option>
+                ${[...new Set(SEED.map(x => x.category))].sort().map(x => `<option ${filters.category === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}
+              </select>
+            </div>
           </div>
-        </dialog>
+          <div class="chips">
+            ${[['all', 'All recipes'], ['mine', 'My family recipes'], ['sample', 'Regional collection'], ['voice', 'With original voice'], ['bookmarked', 'My bookmarks']]
+              .map(([k, t]) => `<button class="chip ${filters.kind === k ? 'active' : ''}" type="button" data-kind="${k}">${t}</button>`)
+              .join('')}
+          </div>
+          <div class="count" id="count"></div>
+        </div>
       </div>
-    </section>`;
-}
 
-function bookSpread(r) {
-  const ingredients = Array.isArray(r.ingredients) ? r.ingredients : [];
-  const steps = Array.isArray(r.steps) ? r.steps : [];
-  const checked = book.checked.get(r.id) || new Set();
-  const chapters = [...new Set(cache.map(x => x.region))];
-  const chapter = String(chapters.indexOf(r.region) + 1).padStart(2, '0');
-  const page = bookPage(r);
-  const saved = book.saved.has(r.id);
-  const cooked = book.cooked.has(r.id);
-  return `<article class="rrb-frame" aria-label="${esc(r.name)} recipe spread">
-    <div class="rrb-spread">
-      <section class="rrb-page rrb-page-left" aria-labelledby="rrb-recipe-title">
-        <div class="rrb-running"><span>Rasoi Rescue &middot; The living cookbook</span>${bookIcon('leaf')}</div>
-        <p class="rrb-chapter-label">${r.demo ? 'Chapter ' + chapter : 'From your family kitchen'} &nbsp;/&nbsp; ${esc(r.region)}</p>
-        <h3 class="rrb-title" id="rrb-recipe-title">${esc(r.name)}</h3>
-        <div class="rrb-recipe-meta"><span>${esc(r.category || 'Family recipe')}</span><span>${bookIcon('clock')}${r.mins ? '~' + esc(r.mins) + ' min' : 'Time not recorded'}</span>${r.audioId ? `<span>${bookIcon('voice')} Family voice</span>` : ''}</div>
-        <figure class="rrb-photo">
-          <div class="rrb-photo-fallback" aria-hidden="true">${bookIcon('pot')}</div>
-          <img src="${esc(r.photoURL || photoFor(r))}" alt="${r.photoURL ? esc(r.name) + ' - saved family photograph' : 'Representative kitchen photograph, not the specific dish'}" decoding="async">
-          <figcaption>${r.photoURL ? 'From the family album' : 'Kitchen inspiration / representative photo'}</figcaption>
-        </figure>
-        <div class="rrb-small-title"><h4>What you&rsquo;ll need</h4><span id="rrb-checked-count">${checked.size}/${ingredients.length} ready</span></div>
-        <ul class="rrb-ingredients">
-          ${ingredients.map((i,k) => `<li><label class="rrb-ingredient"><input type="checkbox" data-book-ingredient="${k}" ${checked.has(k) ? 'checked' : ''}><span>${i.q ? '<b>' + esc(i.q) + '</b> ' : ''}${esc(i.n)}</span></label></li>`).join('')}
-        </ul>
-        <p class="rrb-source-note">${r.demo ? 'From the regional kitchen collection. Home-style variations are welcome.' : 'Preserved by ' + esc(r.by) + '. Your family recipe, kept on this device.'}</p>
-        <div class="rrb-page-footer"><span>${esc(r.region)} &middot; ${esc(r.lang || 'Family kitchen')}</span><span class="rrb-page-number">${bookNumber(page)}</span></div>
-      </section>
-      <section class="rrb-page rrb-page-right" aria-labelledby="rrb-method-heading">
-        <button class="rrb-ribbon" type="button" data-book-action="bookmark" aria-pressed="${saved}" aria-label="${saved ? 'Remove bookmark' : 'Bookmark this recipe'}" title="${saved ? 'Remove bookmark' : 'Bookmark this recipe'}">${bookIcon('bookmark')}</button>
-        <div class="rrb-running" style="padding-right:30px"><span>A little patience. A lot of love.</span><span>&#10022;</span></div>
-        <div class="rrb-method-title"><h4 id="rrb-method-heading">In the kitchen.</h4><span>${String(steps.length).padStart(2,'0')} steps</span></div>
-        <ol class="rrb-method">${steps.map(s => `<li><p>${esc(s)}</p></li>`).join('')}</ol>
-        ${r.tips ? `<aside class="rrb-family-tip"><h5>${bookIcon('star')} A note from the kitchen</h5><p>${esc(r.tips)}</p></aside>` : ''}
-        ${r.story ? `<details class="rrb-story" ${r.demo ? '' : 'open'}><summary>The story behind the dish</summary><p>${esc(r.story)}</p>${r.by ? '<p>Preserved by ' + esc(r.by) + '</p>' : ''}</details>` : ''}
-        ${r.audioId ? '<div class="rrb-audio-box" id="rrb-audio-slot" aria-live="polite">Loading the saved family voice...</div>' : ''}
-        <div class="rrb-page-actions">
-          <a class="rrb-tool rrb-primary" href="#/cook/${encodeURIComponent(r.id)}">${bookIcon('pot')} Cook along ${bookIcon('right')}</a>
-          <button class="rrb-tool" type="button" data-book-action="cooked" aria-pressed="${cooked}">${bookIcon('check')}<span>${cooked ? 'Cooked with love' : 'Mark as cooked'}</span></button>
+      <div class="book-scene">
+        <div class="heritage-book is-closed" id="heritage-book" aria-label="Interactive Rasoi Rescue recipe book">
+          <div class="book-board" aria-hidden="true"></div>
+
+          <div class="open-book-shell" id="open-book-shell">
+            <section class="paper-page left" id="paper-left" aria-label="Left book page"></section>
+            <section class="paper-page right" id="paper-right" aria-label="Right book page"></section>
+            <div class="book-spine" aria-hidden="true"></div>
+
+            <div class="turn-sheet" id="turn-sheet" aria-hidden="true">
+              <div class="sheet-face sheet-front" id="sheet-front"></div>
+              <div class="sheet-face sheet-back" id="sheet-back"></div>
+            </div>
+          </div>
+
+          <div class="book-cover-panel" id="book-cover-panel">
+            <div class="cover-face cover-front">
+              <div class="cover-design">
+                <div class="cover-brand">Rasoi Rescue · Mirava</div>
+                <div class="cover-emblem" aria-hidden="true"></div>
+                <div class="cover-title">The Living<br>Recipe Book</div>
+                <div class="cover-subtitle">Recipes that remember</div>
+                <span class="cover-count">${SEED.length} RECIPES · FAMILY STORIES · ORIGINAL VOICES</span>
+                <button class="open-book-button" id="open-book-btn" type="button">Open the Book</button>
+              </div>
+            </div>
+            <div class="cover-face cover-back">
+              <div class="cover-back-inner">
+                <strong>From their kitchen<br>to your forever.</strong>
+                <span>A Mirava heritage archive</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="rrb-page-footer"><span>Recipes that remember.</span><span class="rrb-page-number">${bookNumber(page + 1)}</span></div>
-      </section>
-    </div>
-  </article>`;
+
+        <div class="book-nav is-closed" id="book-nav">
+          <span class="book-closed-hint">Press “Open the Book” to begin.</span>
+          <button class="book-open-controls" id="book-prev" type="button">← Previous page</button>
+          <span class="book-open-controls book-page-label" id="book-page-label">Contents · Pages 1–2</span>
+          <button class="book-open-controls" id="book-next" type="button">Next page →</button>
+          <button class="book-open-controls" id="book-close" type="button">Close book</button>
+        </div>
+      </div>
+    </section>
+  `;
 }
 
-function bookSyncFilters() {
-  if (!$('#rrb-search')) return;
-  $('#rrb-search').value = filters.q;
-  $('#rrb-region').value = filters.region;
-  $('#rrb-collection').value = filters.kind;
-  $$('[data-book-category]').forEach(el => {
-    const active = el.dataset.bookCategory === filters.category;
-    el.classList.toggle('active', active);
-    el.setAttribute('aria-pressed', String(active));
-  });
+let bookMatches = [];
+let bookSpread = 0; // 0 = contents, 1..n = one recipe per two-page spread
+let bookOpen = false;
+let bookTurning = false;
+let bookTurnTimer = 0;
+let bookSettleTimer = 0;
+
+function bookPage(content, pageNo, side) {
+  return `
+    <div class="book-page-content ${side === 'left' ? 'book-page-left' : 'book-page-right'}">
+      ${content}
+      <div class="book-page-number">— ${pageNo} —</div>
+    </div>
+  `;
 }
-function filterBook(preferred = book.activeId) {
+
+function contentsSpread() {
+  // Every recipe currently on the shelf appears in the index (seed + family recipes).
+  const indexRecipes = bookMatches;
+
+  const left = `
+    <div class="book-dedication" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:8%;">
+      <div class="book-page-kicker">RASOI RESCUE · MIRAVA</div>
+      <h3 style="margin:16px 0 8px;font-size:clamp(28px,3vw,46px);line-height:1.02;">The Living<br>Recipe Book</h3>
+      <div class="ornament" style="color:#b18446;letter-spacing:.45em;margin:10px 0 20px;font-size:16px;">✦ ❦ ✦</div>
+      <p style="max-width:340px;margin:0 auto 14px;font-family:Georgia,serif;color:#705340;line-height:1.7;">Every kitchen carries a history. These pages preserve dishes, memories, methods and flavours passed through generations.</p>
+      <div style="width:72%;height:1px;margin:16px auto;background:linear-gradient(90deg,transparent,rgba(177,132,70,.85),transparent);"></div>
+      <div style="margin-top:5px;padding:16px 24px;border:1px solid rgba(177,132,70,.45);border-radius:12px;background:rgba(177,132,70,.05);">
+        <div style="font-family:Georgia,serif;font-size:38px;line-height:1;color:#7a422d;">${indexRecipes.length}</div>
+        <div style="margin-top:6px;font-family:var(--mono,monospace);font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:#9b7655;">Recipes Preserved</div>
+      </div>
+      <p style="margin-top:20px;max-width:310px;font-size:11px;line-height:1.6;color:#81634e;">Select any recipe from the index to open its complete two-page spread.</p>
+      <div style="margin-top:12px;font-size:18px;color:#ad844e;">❧</div>
+    </div>
+  `;
+
+  const right = `
+    <div class="book-page-scroll" style="height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:8px;">
+      <div class="book-page-kicker">COMPLETE RECIPE INDEX</div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:15px;margin:4px 0 4px;">
+        <h3 style="margin:0;font-size:clamp(25px,2.4vw,36px);">${indexRecipes.length} Recipes</h3>
+        <span style="font-family:var(--mono,monospace);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:#9a7653;white-space:nowrap;">Tap to open</span>
+      </div>
+      <div style="width:100%;height:1px;margin:12px 0 10px;background:linear-gradient(90deg,rgba(177,132,70,.7),rgba(177,132,70,.12));"></div>
+      ${indexRecipes.length ? `
+        <div class="book-index-list" style="display:grid;grid-template-columns:1fr;gap:2px;margin-top:6px;padding-bottom:28px;">
+          ${indexRecipes.map((r, i) => `
+            <button class="book-index-item rr-index-item" type="button" data-book-jump="${i + 1}">
+              <span class="n" style="font-family:var(--mono,monospace);font-size:9px;letter-spacing:.08em;color:#a07749;">${String(i + 1).padStart(3, '0')}</span>
+              <strong ${raw(r)} style="font-family:Georgia,'Times New Roman',serif;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#542a20;">${favourites.saved.has(r.id) ? '★ ' : ''}${esc(r.name)}</strong>
+              <small ${raw(r)} style="max-width:95px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;letter-spacing:.045em;text-transform:uppercase;color:#8a694f;">${esc(r.region)}</small>
+            </button>
+          `).join('')}
+        </div>
+      ` : `
+        <div class="empty" style="padding:25px 0;text-align:center;">
+          No recipes match your current search.
+          <br><br>
+          <a href="#/record"><u>Preserve your own recipe</u></a>
+        </div>
+      `}
+    </div>
+  `;
+
+  return {
+    left: bookPage(left, 1, 'left'),
+    right: bookPage(right, 2, 'right'),
+    label: `Complete Index · ${indexRecipes.length} Recipes`
+  };
+}
+
+function recipeSpread(recipe, recipeIndex) {
+  const pageLeft = recipeIndex * 2 + 1;
+  const pageRight = pageLeft + 1;
+  const saved = favourites.saved.has(recipe.id);
+  const cooked = favourites.cooked.has(recipe.id);
+  const left = `
+    <div class="book-page-scroll">
+      <div class="book-page-kicker"><span ${raw(recipe)}>${esc(recipe.region)}</span> · ${esc(recipe.category || 'Family recipe')}</div>
+      <h3 ${raw(recipe)}>${esc(recipe.name)}</h3>
+      <div class="book-recipe-meta">
+        <span>◷ ${recipe.mins || '?'} min</span>
+        <span>${recipe.demo ? '✦ Regional collection' : '♥ Family recipe'}</span>
+        ${recipe.audioId ? '<span>♫ Voice preserved</span>' : ''}
+      </div>
+      <div class="book-recipe-photo">
+        <img loading="lazy" src="${esc(recipe.photoURL || photoFor(recipe))}" data-fallback="${esc(categoryPhotoFor(recipe))}" alt="Food photograph representing ${esc(recipe.name)}">
+      </div>
+      <h4>Ingredients</h4>
+      <ul class="book-ingredients" ${raw(recipe)}>
+        ${(recipe.ingredients || []).map(i => `<li><b>${esc(i.q || '')}</b><span>${esc(i.n || '')}</span></li>`).join('')}
+      </ul>
+      ${recipe.story ? `<div class="book-story-note" ${raw(recipe)}>“${esc(recipe.story)}”</div>` : ''}
+    </div>
+  `;
+  const right = `
+    <div class="book-page-scroll">
+      <div class="book-page-kicker">Method · ${String(recipeIndex).padStart(2, '0')}</div>
+      <h3>From the kitchen</h3>
+      <h4>Step by step</h4>
+      <ol class="book-steps" ${raw(recipe)}>
+        ${(recipe.steps || []).map(step => `<li>${esc(step)}</li>`).join('')}
+      </ol>
+      ${recipe.tips ? `<div class="book-tip-note"><strong>Kitchen note:</strong> <span ${raw(recipe)}>${esc(recipe.tips)}</span></div>` : ''}
+      <a class="book-focus-link" href="#/cook/${encodeURIComponent(recipe.id)}">Open focused cooking view ↗</a>
+      <div class="rr-book-marks">
+        <button type="button" class="rr-mark" data-book-mark="${esc(recipe.id)}" aria-pressed="${saved}">${saved ? '★ Remove bookmark' : '☆ Bookmark this recipe'}</button>
+        <button type="button" class="rr-mark" data-book-cooked="${esc(recipe.id)}" aria-pressed="${cooked}">${cooked ? '✓ Cooked with love' : 'Mark as cooked'}</button>
+      </div>
+    </div>
+  `;
+  return {
+    left: bookPage(left, pageLeft, 'left'),
+    right: bookPage(right, pageRight, 'right'),
+    label: `${recipe.name} · Pages ${pageLeft}–${pageRight}`
+  };
+}
+
+function getBookSpread(index) {
+  if (index <= 0 || !bookMatches.length) return contentsSpread();
+  const recipe = bookMatches[index - 1];
+  if (!recipe) return contentsSpread();
+  return recipeSpread(recipe, index);
+}
+
+function updateBookControls() {
+  const prev = $('#book-prev');
+  const next = $('#book-next');
+  const label = $('#book-page-label');
+  if (!prev || !next || !label) return;
+  prev.disabled = bookSpread <= 0 || bookTurning;
+  next.disabled = bookSpread >= bookMatches.length || bookTurning || !bookMatches.length;
+  const recipe = bookSpread > 0 ? bookMatches[bookSpread - 1] : null;
+  label.textContent = getBookSpread(bookSpread).label;
+  // Recipe names are user content for family recipes.
+  if (recipe && !recipe.demo) label.setAttribute('translate', 'no'); else label.removeAttribute('translate');
+}
+
+function rememberSpread() {
+  const recipe = bookSpread > 0 ? bookMatches[bookSpread - 1] : null;
+  const id = recipe?.id || '';
+  if (id && id !== favourites.last) { favourites.last = id; persistFavourites(); }
+  try { history.replaceState(history.state, '', id ? '#/cookbook/' + encodeURIComponent(id) : '#/cookbook'); } catch {}
+}
+
+function renderBookSpread(index = bookSpread) {
+  const spread = getBookSpread(index);
+  const left = $('#paper-left');
+  const right = $('#paper-right');
+  if (!left || !right) return;
+  left.innerHTML = spread.left;
+  right.innerHTML = spread.right;
+  updateBookControls();
+  if (bookOpen) rememberSpread();
+}
+
+function openBook() {
+  if (bookOpen) return;
+  bookOpen = true;
+  const book = $('#heritage-book');
+  const nav = $('#book-nav');
+  book?.classList.remove('is-closed');
+  book?.classList.add('is-open');
+  nav?.classList.remove('is-closed');
+  clearTimeout(bookSettleTimer);
+  bookSettleTimer = setTimeout(() => book?.classList.add('cover-settled'), 1060);
+  renderBookSpread();
+}
+
+function closeBook() {
+  if (!bookOpen || bookTurning) return;
+  const book = $('#heritage-book');
+  const nav = $('#book-nav');
+  book?.classList.remove('cover-settled');
+  requestAnimationFrame(() => {
+    book?.classList.remove('is-open');
+    book?.classList.add('is-closed');
+    nav?.classList.add('is-closed');
+  });
+  bookOpen = false;
+  try { history.replaceState(history.state, '', '#/cookbook'); } catch {}
+}
+
+function finishTurn(target) {
+  bookSpread = target;
+  const sheet = $('#turn-sheet');
+  if (sheet) sheet.className = 'turn-sheet';
+  bookTurning = false;
+  renderBookSpread(bookSpread);
+}
+
+function turnBook(delta) {
+  if (!bookOpen) { openBook(); return; }
+  if (bookTurning) return;
+  const target = bookSpread + delta;
+  if (target < 0 || target > bookMatches.length) return;
+
+  const current = getBookSpread(bookSpread);
+  const destination = getBookSpread(target);
+  const left = $('#paper-left');
+  const right = $('#paper-right');
+  const sheet = $('#turn-sheet');
+  const front = $('#sheet-front');
+  const back = $('#sheet-back');
+  if (!left || !right || !sheet || !front || !back) return;
+
+  bookTurning = true;
+  updateBookControls();
+  sheet.className = 'turn-sheet active ' + (delta > 0 ? 'forward' : 'reverse');
+
+  if (delta > 0) {
+    // Current right page lifts; its reverse side is the next left page.
+    front.innerHTML = current.right;
+    back.innerHTML = destination.left;
+    right.innerHTML = destination.right;
+    void sheet.offsetWidth;
+    sheet.classList.add('anim-forward');
+  } else {
+    // Current left page lifts back toward the right; reverse reveals previous right.
+    front.innerHTML = current.left;
+    back.innerHTML = destination.right;
+    left.innerHTML = destination.left;
+    void sheet.offsetWidth;
+    sheet.classList.add('anim-reverse');
+  }
+
+  clearTimeout(bookTurnTimer);
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  bookTurnTimer = setTimeout(() => finishTurn(target), reduced ? 30 : 940);
+}
+
+function jumpBook(target) {
+  if (!Number.isFinite(target)) return;
+  target = Math.max(0, Math.min(target, bookMatches.length));
+  if (!bookOpen) openBook();
+  if (target === bookSpread) return;
+  const book = $('#heritage-book');
+  book?.animate?.([
+    { filter: 'drop-shadow(0 38px 38px rgba(0,0,0,.48)) brightness(1)' },
+    { filter: 'drop-shadow(0 38px 38px rgba(0,0,0,.48)) brightness(.96)' },
+    { filter: 'drop-shadow(0 38px 38px rgba(0,0,0,.48)) brightness(1)' }
+  ], { duration: 330, easing: 'ease' });
+  bookSpread = target;
+  renderBookSpread();
+}
+
+const matchesQuery = (r, q) => {
+  const fields = [r.name, r.region, r.category, r.by, ...(r.ingredients || []).map(i => i.n)];
+  const i18n = window.MiravaI18n;
+  if (i18n?.matches) return i18n.matches(fields, q);
+  return fields.join(' ').toLowerCase().includes(q);
+};
+
+function filterCards() {
   const q = filters.q.trim().toLowerCase();
-  book.found = cache.filter(r =>
-    (!q || bookSearchText(r).includes(q)) &&
+  bookMatches = cache.filter(r =>
+    (!q || matchesQuery(r, q)) &&
     (!filters.region || r.region === filters.region) &&
     (!filters.category || r.category === filters.category) &&
     (filters.kind === 'all' ||
       (filters.kind === 'mine' && !r.demo) ||
       (filters.kind === 'sample' && r.demo) ||
       (filters.kind === 'voice' && r.audioId) ||
-      (filters.kind === 'bookmarked' && book.saved.has(r.id)))
+      (filters.kind === 'bookmarked' && favourites.saved.has(r.id)))
   );
-  book.index = Math.max(0, book.found.findIndex(r => r.id === preferred));
-  bookSyncFilters();
-  renderBook();
-}
-function bookClearFilters() {
-  filters = { q: '', region: '', category: '', kind: 'all' };
-  book.cover = false;
-  filterBook();
-}
-function bookReleaseMedia() {
-  book.mediaToken++;
-  if (book.mediaURL) URL.revokeObjectURL(book.mediaURL);
-  book.mediaURL = '';
-}
-async function bookLoadVoice(r) {
-  if (!r.audioId) return;
-  const token = book.mediaToken;
-  try {
-    const item = await get('blobs', r.audioId);
-    const slot = $('#rrb-audio-slot');
-    if (token !== book.mediaToken || !slot || r.id !== book.activeId) return;
-    if (!item || !(item.blob instanceof Blob)) {
-      slot.textContent = 'This recording is not available in this browser.';
-      return;
-    }
-    book.mediaURL = URL.createObjectURL(item.blob);
-    slot.innerHTML = `<label for="rrb-voice">${bookIcon('voice')} The original family voice</label><audio id="rrb-voice" controls preload="metadata" src="${book.mediaURL}"></audio>`;
-  } catch (_) {
-    const slot = $('#rrb-audio-slot');
-    if (slot && token === book.mediaToken) slot.textContent = 'The saved recording could not be loaded.';
-  }
-}
-function bookGhost(page) {
-  if (!page) return null;
-  const clone = page.cloneNode(true);
-  clone.removeAttribute('id');
-  clone.removeAttribute('aria-labelledby');
-  clone.setAttribute('aria-hidden', 'true');
-  clone.inert = true;
-  $$('[id]', clone).forEach(el => el.removeAttribute('id'));
-  $$('*', clone).forEach(el => {
-    for (const attr of [...el.attributes]) if (attr.name.startsWith('data-book-')) el.removeAttribute(attr.name);
-  });
-  $$('audio', clone).forEach(el => el.remove());
-  return clone;
-}
-function bookStopTurn() {
-  if (book.animation) book.animation.cancel();
-  book.animation = null;
-  $$('.rrb-leaf, .rrb-static-leaf').forEach(el => el.remove());
-  const frame = $('.rrb-frame');
-  if (frame) { frame.classList.remove('rrb-flipping'); frame.removeAttribute('aria-busy'); }
-}
-function bookAnimate(direction, oldLeft, oldRight) {
-  const frame = $('.rrb-frame');
-  if (!frame || !oldLeft || !oldRight || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  if (window.matchMedia('(max-width: 760px)').matches) {
-    const animation = frame.animate([{opacity:.6, transform:`translateX(${direction * 8}px)`},{opacity:1,transform:'translateX(0)'}], {duration:200,easing:'ease-out'});
-    book.animation = animation;
-    animation.finished.then(() => { if (book.animation === animation) book.animation = null; }).catch(() => {});
-    return;
-  }
-  const forward = direction > 0;
-  const leaf = document.createElement('div');
-  leaf.className = 'rrb-leaf ' + (forward ? 'rrb-forward' : 'rrb-backward');
-  leaf.setAttribute('aria-hidden', 'true'); leaf.inert = true;
-  const front = document.createElement('div'); front.className = 'rrb-leaf-face';
-  const back = document.createElement('div'); back.className = 'rrb-leaf-face rrb-leaf-back';
-  front.append(forward ? oldRight : oldLeft);
-  back.append(bookGhost($(forward ? '.rrb-page-left' : '.rrb-page-right', frame)));
-  leaf.append(front, back);
-  const stationary = document.createElement('div');
-  stationary.className = 'rrb-static-leaf';
-  stationary.setAttribute('aria-hidden', 'true'); stationary.inert = true;
-  stationary.style.cssText = `position:absolute;top:9px;bottom:13px;width:calc(50% - 10px);left:${forward ? '10px' : '50%'};z-index:4;overflow:hidden;pointer-events:none`;
-  const oldStationary = forward ? oldLeft : oldRight;
-  oldStationary.style.minHeight = '100%';
-  stationary.append(oldStationary);
-  frame.append(stationary, leaf);
-  frame.classList.add('rrb-flipping'); frame.setAttribute('aria-busy', 'true');
-  const animation = leaf.animate([
-    {transform:'rotateY(0deg)', filter:'brightness(1)'},
-    {transform:`rotateY(${forward ? -86 : 86}deg)`, filter:'brightness(.91)',offset:.5},
-    {transform:`rotateY(${forward ? -180 : 180}deg)`,filter:'brightness(1)'}
-  ], {duration:650,easing:'cubic-bezier(.35,.05,.2,1)',fill:'forwards'});
-  book.animation = animation;
-  const finish = () => {
-    leaf.remove(); stationary.remove(); frame.classList.remove('rrb-flipping'); frame.removeAttribute('aria-busy');
-    if (book.animation === animation) book.animation = null;
-  };
-  animation.finished.then(finish).catch(finish);
+  $('#count').textContent = `${bookMatches.length} recipe${bookMatches.length === 1 ? '' : 's'} on this shelf`;
+  bookSpread = 0;
+  renderBookSpread();
 }
 
-function renderBook(direction = 0) {
-  const host = $('#rrb-host');
-  if (!host) return;
-  bookStopTurn();
-  const oldLeft = direction ? bookGhost($('.rrb-page-left', host)) : null;
-  const oldRight = direction ? bookGhost($('.rrb-page-right', host)) : null;
-  bookReleaseMedia();
-  const r = book.found[book.index];
-  const activeFilters = !!(filters.q || filters.region || filters.category || filters.kind !== 'all');
-  $('#rrb-clear').hidden = !activeFilters;
-  $('#rrb-count').textContent = `${book.found.length} recipe${book.found.length === 1 ? '' : 's'} ${activeFilters ? 'in this selection' : 'in your book'}`;
-  $('#rrb-saved-count').textContent = `${cache.filter(x => book.saved.has(x.id)).length} bookmarked`;
-  $('#rrb-controls').hidden = !r || book.cover;
-  $('.rrb-tabs').hidden = book.cover;
-  const coverButton = $('[data-book-action="cover"]');
-  coverButton.setAttribute('aria-label', book.cover ? 'Return to recipe pages' : 'Show the book cover');
-  coverButton.title = book.cover ? 'Return to recipe pages' : 'Show the book cover';
-  coverButton.innerHTML = `${bookIcon('book')}<span>${book.cover ? 'Pages' : 'Cover'}</span>`;
-  if (book.cover) {
-    host.innerHTML = `<div class="rrb-cover-scene">${bookCover()}</div><p class="rrb-cover-help">A collection to come back to. Open where you left off.</p>`;
-    $('#rrb-live').textContent = 'Book cover. Select Open the book to return to the recipes.';
-    return;
-  }
-  if (!r) {
-    const family = filters.kind === 'mine' || filters.kind === 'voice';
-    const bookmarked = filters.kind === 'bookmarked';
-    host.innerHTML = `<div class="rrb-empty">${bookIcon(bookmarked ? 'bookmark' : 'book')}<h3>${bookmarked ? 'Your ribbon is waiting.' : family ? 'Your family chapter starts here.' : 'No recipes on these pages.'}</h3><p>${bookmarked ? 'Tap the ribbon on any recipe to keep it in your bookmarked collection.' : family ? 'Preserve a recipe or add an original recording to make these pages your own.' : 'Try another name, ingredient or region, or clear your filters to return to the full book.'}</p><button class="rrb-tool" type="button" data-book-action="clear">Browse the whole book</button>${family ? ' <a class="rrb-tool" href="#/record">Preserve a recipe</a>' : ''}</div>`;
-    $('#rrb-live').textContent = 'No matching recipes. Clear the filters or preserve a family recipe.';
-    return;
-  }
-  book.activeId = r.id;
-  bookPersist();
-  // replaceState gives every recipe a copyable link without triggering
-  // the hash router, resetting scroll, or rebuilding the entire site.
-  try { history.replaceState(history.state, '', '#/cookbook/' + encodeURIComponent(r.id)); } catch (_) {}
-  host.innerHTML = bookSpread(r);
-  $$('img', host).forEach(img => img.addEventListener('error', () => { img.style.visibility = 'hidden'; const caption = $('figcaption', img.parentElement); if (caption) caption.textContent = 'From the recipe notebook'; }, {once:true}));
-  $('#rrb-prev').disabled = book.index === 0;
-  $('#rrb-next').disabled = book.index === book.found.length - 1;
-  $('#rrb-prev-title').textContent = book.found[book.index - 1]?.name || 'The beginning';
-  $('#rrb-next-title').textContent = book.found[book.index + 1]?.name || 'The last page';
-  $('#rrb-page-input').value = book.index + 1;
-  $('#rrb-page-input').max = book.found.length;
-  $('#rrb-total').textContent = book.found.length;
-  $('#rrb-folios').textContent = `PAGES ${bookNumber(bookPage(r))} / ${bookNumber(bookPage(r) + 1)}`;
-  $('#rrb-reading-progress').style.width = ((book.index + 1) / book.found.length * 100) + '%';
-  $('#rrb-live').textContent = `${r.name}. Recipe ${book.index + 1} of ${book.found.length}. ${r.region}.`;
-  if (direction) bookAnimate(direction, oldLeft, oldRight);
-  bookLoadVoice(r);
-}
-function bookTurn(to) {
-  if (book.cover || book.animation || !book.found.length) return;
-  const index = Math.max(0, Math.min(book.found.length - 1, Math.floor(to)));
-  if (!Number.isFinite(index) || index === book.index) return;
-  const direction = index > book.index ? 1 : -1;
-  book.index = index;
-  renderBook(direction);
-  if (window.matchMedia('(max-width: 760px)').matches && $('#rrb-host').getBoundingClientRect().top < 0) {
-    $('#rrb-host').scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'});
+function toggleMark(button, kind) {
+  const id = kind === 'saved' ? button.dataset.bookMark : button.dataset.bookCooked;
+  const set = favourites[kind];
+  const on = !set.has(id);
+  if (on) set.add(id); else set.delete(id);
+  persistFavourites();
+  button.setAttribute('aria-pressed', String(on));
+  if (kind === 'saved') {
+    button.textContent = on ? '★ Remove bookmark' : '☆ Bookmark this recipe';
+    toast(on ? 'A ribbon for this recipe. Bookmarked!' : 'Bookmark removed');
+  } else {
+    button.textContent = on ? '✓ Cooked with love' : 'Mark as cooked';
+    toast(on ? 'Another recipe made into a memory.' : 'Cooking mark removed');
   }
 }
-function bookJump() {
-  const input = $('#rrb-page-input');
-  const n = Number(input.value);
-  if (!Number.isInteger(n) || n < 1 || n > book.found.length) {
-    input.value = book.index + 1;
-    toast(`Choose a recipe number from 1 to ${book.found.length}`);
-    return;
-  }
-  bookTurn(n - 1);
-  input.value = book.index + 1;
-}
-function bookRenderIndex(q = '') {
-  const matches = cache.filter(r => !q.trim() || bookSearchText(r).includes(q.trim().toLowerCase()));
-  const grouped = new Map();
-  matches.forEach(r => {
-    const title = r.demo ? r.region : 'Your family pages';
-    if (!grouped.has(title)) grouped.set(title, []);
-    grouped.get(title).push(r);
-  });
-  $('#rrb-index-body').innerHTML = matches.length ? [...grouped.entries()].map(([region, recipes]) => `
-    <h4 class="rrb-index-chapter">${esc(region)}</h4>
-    ${recipes.map(r => `<button type="button" class="rrb-index-entry" data-book-open="${esc(r.id)}" ${r.id === book.activeId ? 'aria-current="page"' : ''}><strong>${esc(r.name)}</strong>${book.saved.has(r.id) ? bookIcon('bookmark') : ''}<em aria-hidden="true"></em><span aria-label="Page ${bookPage(r)}">${bookNumber(bookPage(r))}</span></button>`).join('')}`).join('')
-    : '<p style="padding:24px 0;color:#92765b">No matching recipes. Try another ingredient or name.</p>';
-  $('#rrb-index-count').textContent = `${matches.length} recipes / choose a title to turn to its page`;
-}
-function bookOpenIndex() {
-  const dialog = $('#rrb-index');
-  $('#rrb-index-search').value = '';
-  bookRenderIndex();
-  book.previousOverflow = document.body.style.overflow;
-  dialog.showModal();
-  document.body.style.overflow = 'hidden';
-  $('#rrb-index-search').focus();
-}
-function bookDispose() {
-  bookStopTurn();
-  bookReleaseMedia();
-  const dialog = $('#rrb-index');
-  if (dialog?.open) { dialog.close(); document.body.style.overflow = book.previousOverflow; }
-  book.controller?.abort();
-  book.controller = null;
-}
+
 function bindCookbook(requestedId = '') {
-  book.controller = new AbortController();
-  const signal = book.controller.signal;
-  book.cover = false;
+  bookOpen = false;
+  bookTurning = false;
+  bookSpread = 0;
+
+  $('#search').oninput = e => { filters.q = e.target.value; filterCards(); };
+  $('#region').onchange = e => { filters.region = e.target.value; filterCards(); };
+  $('#category').onchange = e => { filters.category = e.target.value; filterCards(); };
+  $$('[data-kind]').forEach(b => b.onclick = () => {
+    filters.kind = b.dataset.kind;
+    $$('[data-kind]').forEach(x => x.classList.toggle('active', x === b));
+    filterCards();
+  });
+
+  $('#open-book-btn').onclick = openBook;
+  $('#book-prev').onclick = () => turnBook(-1);
+  $('#book-next').onclick = () => turnBook(1);
+  $('#book-close').onclick = closeBook;
+  $('#open-book-shell').onclick = e => {
+    const jump = e.target.closest('[data-book-jump]');
+    if (jump) { jumpBook(Number(jump.dataset.bookJump)); return; }
+    const mark = e.target.closest('[data-book-mark]');
+    if (mark) { toggleMark(mark, 'saved'); return; }
+    const cooked = e.target.closest('[data-book-cooked]');
+    if (cooked) toggleMark(cooked, 'cooked');
+  };
+
+  filterCards();
+
+  // Deep link #/cookbook/<id>: open the book at that recipe.
   if (requestedId) {
-    if (cache.some(r => r.id === requestedId)) {
-      book.activeId = requestedId;
-      filters = {q:'', region:'', category:'', kind:'all'};
-    } else toast('That recipe is not available here. Opening your book instead.');
+    let index = bookMatches.findIndex(r => r.id === requestedId);
+    if (index < 0 && cache.some(r => r.id === requestedId)) {
+      filters = { q: '', region: '', category: '', kind: 'all' };
+      $('#search').value = ''; $('#region').value = ''; $('#category').value = '';
+      $$('[data-kind]').forEach(x => x.classList.toggle('active', x.dataset.kind === 'all'));
+      filterCards();
+      index = bookMatches.findIndex(r => r.id === requestedId);
+    }
+    if (index >= 0) { bookSpread = index + 1; openBook(); }
+    else toast('That recipe is not available here. Opening your book instead.');
   }
-  const root = $('.rrb-book-section');
-  root.addEventListener('click', e => {
-    const entry = e.target.closest('[data-book-open]');
-    if (entry) {
-      $('#rrb-index').close();
-      book.activeId = entry.dataset.bookOpen;
-      bookClearFilters();
-      return;
-    }
-    const category = e.target.closest('[data-book-category]');
-    if (category) { filters.category = category.dataset.bookCategory; book.cover = false; filterBook(); return; }
-    const button = e.target.closest('[data-book-action]');
-    if (!button || button.disabled) return;
-    const action = button.dataset.bookAction;
-    if (action === 'previous') return bookTurn(book.index - 1);
-    if (action === 'next') return bookTurn(book.index + 1);
-    if (action === 'contents') return bookOpenIndex();
-    if (action === 'close-index') return $('#rrb-index').close();
-    if (action === 'clear') return bookClearFilters();
-    if (action === 'cover') { book.cover = !book.cover; renderBook(); return; }
-    if (action === 'open') { book.cover = false; renderBook(); return; }
-    const r = book.found[book.index];
-    if (!r) return;
-    if (action === 'bookmark') {
-      const saved = !book.saved.has(r.id);
-      saved ? book.saved.add(r.id) : book.saved.delete(r.id);
-      const persisted = bookPersist();
-      toast(persisted ? saved ? 'A ribbon for this recipe. Bookmarked!' : 'Bookmark removed' : 'Bookmark updated for this session; sign in to keep it');
-      if (filters.kind === 'bookmarked' && !saved) { filterBook(); return; }
-      button.setAttribute('aria-pressed', String(saved));
-      button.setAttribute('aria-label', saved ? 'Remove bookmark' : 'Bookmark this recipe');
-      button.title = saved ? 'Remove bookmark' : 'Bookmark this recipe';
-      $('#rrb-saved-count').textContent = `${cache.filter(x => book.saved.has(x.id)).length} bookmarked`;
-    }
-    if (action === 'cooked') {
-      const cooked = !book.cooked.has(r.id);
-      cooked ? book.cooked.add(r.id) : book.cooked.delete(r.id);
-      const persisted = bookPersist();
-      button.setAttribute('aria-pressed', String(cooked));
-      $('span', button).textContent = cooked ? 'Cooked with love' : 'Mark as cooked';
-      toast(persisted ? cooked ? 'Another recipe made into a memory.' : 'Cooking mark removed' : 'Cooking mark updated for this session; sign in to keep it');
-    }
-  }, {signal});
-  root.addEventListener('input', e => {
-    if (e.target.id === 'rrb-search') { filters.q = e.target.value; book.cover = false; filterBook(); }
-    if (e.target.id === 'rrb-index-search') bookRenderIndex(e.target.value);
-  }, {signal});
-  root.addEventListener('change', e => {
-    if (e.target.id === 'rrb-region') { filters.region = e.target.value; book.cover = false; filterBook(); }
-    if (e.target.id === 'rrb-collection') { filters.kind = e.target.value; book.cover = false; filterBook(); }
-    if (e.target.id === 'rrb-page-input') bookJump();
-    if (e.target.matches('[data-book-ingredient]')) {
-      const r = book.found[book.index]; if (!r) return;
-      if (!book.checked.has(r.id)) book.checked.set(r.id, new Set());
-      const set = book.checked.get(r.id), index = Number(e.target.dataset.bookIngredient);
-      e.target.checked ? set.add(index) : set.delete(index);
-      $('#rrb-checked-count').textContent = `${set.size}/${r.ingredients.length} ready`;
-    }
-  }, {signal});
-  $('#rrb-page-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); bookJump(); }
-  }, {signal});
-  const dialog = $('#rrb-index');
-  dialog.addEventListener('close', () => { document.body.style.overflow = book.previousOverflow; }, {signal});
-  dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); }, {signal});
-  window.addEventListener('keydown', e => {
-    if (dialog.open || book.cover || e.ctrlKey || e.metaKey || e.altKey || /INPUT|TEXTAREA|SELECT|BUTTON|A|AUDIO|SUMMARY/.test(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
-    if (e.key === 'ArrowRight') { e.preventDefault(); bookTurn(book.index + 1); }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); bookTurn(book.index - 1); }
-  }, {signal});
-  const host = $('#rrb-host');
-  host.addEventListener('touchstart', e => {
-    if (e.touches.length !== 1 || e.target.closest('button,a,input,textarea,audio,summary')) { book.touch = null; return; }
-    book.touch = {x:e.touches[0].clientX,y:e.touches[0].clientY,time:Date.now()};
-  }, {passive:true,signal});
-  host.addEventListener('touchend', e => {
-    if (!book.touch || !e.changedTouches.length) return;
-    const dx = e.changedTouches[0].clientX - book.touch.x, dy = e.changedTouches[0].clientY - book.touch.y;
-    if (Date.now() - book.touch.time < 800 && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) bookTurn(book.index + (dx < 0 ? 1 : -1));
-    book.touch = null;
-  }, {passive:true,signal});
-  host.addEventListener('touchcancel', () => { book.touch = null; }, {passive:true,signal});
-  filterBook();
 }
 
 // ----------------------------------------------------------
@@ -770,47 +987,46 @@ function recordPage() {
             <div class="timer" id="timer">00:00</div>
             <div id="record-status" class="muted">Ready to record</div>
             <div class="actions">
-              <button class="btn primary small" id="start">● Record</button>
-              <button class="btn outline small" id="pause" disabled>Ⅱ Pause</button>
-              <button class="btn outline small" id="resume" disabled>▶ Resume</button>
-              <button class="btn dark small" id="stop" disabled>■ Stop</button>
+              <button class="btn primary small" id="start" type="button">● Record</button>
+              <button class="btn outline small" id="pause" type="button" disabled>Ⅱ Pause</button>
+              <button class="btn outline small" id="resume" type="button" disabled>▶ Resume</button>
+              <button class="btn dark small" id="stop" type="button" disabled>■ Stop</button>
             </div>
             <div class="field" style="margin-top:22px">
-              <label>Or upload an audio file (max 60 MB)</label>
+              <label for="audio-upload">Or upload an audio file (max 10 MB)</label>
               <input type="file" id="audio-upload" accept="audio/*">
             </div>
             <div id="preview"></div>
             <div id="rec-message"></div>
-            <div class="message">🔒 Saved recordings remain on this device. For permanent preservation, export backups of your family recipes and recordings from the vault.</div>
           </div>
           <div class="form-card">
             <h3>02 / Preserve the details</h3>
             <form id="recipe-form">
               <div class="form-grid">
-                <div class="field"><label>Recipe name *</label><input id="name" required placeholder="Nani's Sunday Rajma"></div>
-                <div class="field"><label>Shared by *</label><input id="by" required placeholder="Nani"></div>
-                <div class="field"><label>Region</label><input id="origin" placeholder="Punjab"></div>
-                <div class="field"><label>Cooking time (minutes)</label><input id="mins" type="number" min="1" placeholder="60"></div>
+                <div class="field"><label for="name">Recipe name *</label><input id="name" required maxlength="160" placeholder="Nani's Sunday Rajma"></div>
+                <div class="field"><label for="by">Shared by *</label><input id="by" required maxlength="100" placeholder="Nani"></div>
+                <div class="field"><label for="origin">Region</label><input id="origin" maxlength="100" placeholder="Punjab"></div>
+                <div class="field"><label for="mins">Cooking time (minutes)</label><input id="mins" type="number" min="1" max="10000" step="1" placeholder="60"></div>
                 <div class="field">
-                  <label>Category</label>
+                  <label for="type">Category</label>
                   <select id="type">
                     <option>Main Course</option><option>Breakfast</option><option>Snack</option>
                     <option>Dessert</option><option>Bread</option><option>Side</option><option>Drink</option>
                   </select>
                 </div>
                 <div class="field">
-                  <label>Language</label>
+                  <label for="language">Language</label>
                   <select id="language">
-                    ${['Hindi','English','Tamil','Telugu','Marathi','Gujarati','Bengali','Punjabi','Kannada','Malayalam','Urdu','Other']
+                    ${['Hindi', 'English', 'Tamil', 'Telugu', 'Marathi', 'Gujarati', 'Bengali', 'Punjabi', 'Kannada', 'Malayalam', 'Urdu', 'Other']
                       .map(x => `<option>${x}</option>`).join('')}
                   </select>
                 </div>
-                <div class="field wide"><label>Ingredients * (quantity | ingredient, one per line)</label><textarea id="ingredients" rows="4" required placeholder="1 cup | rajma\n2 tbsp | ghee"></textarea></div>
-                <div class="field wide"><label>Steps * (one step per line)</label><textarea id="steps" rows="5" required placeholder="Soak the beans overnight.\nCook until tender."></textarea></div>
-                <div class="field wide"><label>Secret family tip</label><textarea id="tips" rows="2"></textarea></div>
-                <div class="field wide"><label>Story behind the dish</label><textarea id="story" rows="3"></textarea></div>
-                <div class="field wide"><label>Transcript (optional, manually entered)</label><textarea id="transcript" rows="3"></textarea></div>
-                <div class="field wide"><label>Dish photo (optional)</label><input type="file" id="photo" accept="image/*"></div>
+                <div class="field wide"><label for="ingredients">Ingredients * (quantity | ingredient, one per line)</label><textarea id="ingredients" rows="4" required placeholder="1 cup | rajma\n2 tbsp | ghee"></textarea></div>
+                <div class="field wide"><label for="steps">Steps * (one detailed step per line — aim for 6–12)</label><textarea id="steps" rows="9" required placeholder="Wash and sort the beans.\nSoak them overnight.\nDrain and add fresh water.\nPressure-cook until completely tender.\nPrepare the masala separately.\nCombine and simmer until thick.\nFinish with the family seasoning."></textarea></div>
+                <div class="field wide"><label for="tips">Secret family tip</label><textarea id="tips" rows="2"></textarea></div>
+                <div class="field wide"><label for="story">Story behind the dish</label><textarea id="story" rows="3"></textarea></div>
+                <div class="field wide"><label for="transcript">Transcript (optional, manually entered)</label><textarea id="transcript" rows="3"></textarea></div>
+                <div class="field wide"><label for="photo">Dish photo (optional)</label><input type="file" id="photo" accept="image/jpeg,image/png,image/webp"></div>
                 <label class="wide"><input type="checkbox" id="review" required> I have checked these details against the original source.</label>
                 <button class="btn dark wide" type="submit">♥ Save to my family vault</button>
               </div>
@@ -823,6 +1039,7 @@ function recordPage() {
 }
 
 function updateRecordUI() {
+  if (!$('#start')) return;
   const mode = state.mode;
   $('#start').disabled = mode !== 'idle';
   $('#pause').disabled = mode !== 'recording';
@@ -844,18 +1061,18 @@ function timer() {
 function wave() {
   const c = $('#wave');
   if (!c || !state.analyser) return;
-  const ctx = c.getContext('2d');
+  const g = c.getContext('2d');
   const scale = devicePixelRatio || 1;
   c.width = c.clientWidth * scale;
   c.height = 130 * scale;
-  ctx.clearRect(0, 0, c.width, c.height);
+  g.clearRect(0, 0, c.width, c.height);
   const data = new Uint8Array(state.analyser.frequencyBinCount);
   state.analyser.getByteFrequencyData(data);
   for (let i = 0; i < 55; i++) {
     const v = state.mode === 'recording' ? data[Math.floor(i * data.length / 55)] / 255 : .06;
     const h = Math.max(5, v * c.height * .9);
-    ctx.fillStyle = i % 2 ? '#ffbd65' : '#e76e53';
-    ctx.fillRect(i * c.width / 55 + 3, (c.height - h) / 2, c.width / 55 - 6, h);
+    g.fillStyle = i % 2 ? '#ffbd65' : '#e76e53';
+    g.fillRect(i * c.width / 55 + 3, (c.height - h) / 2, c.width / 55 - 6, h);
   }
   timer();
   if (state.mode !== 'idle') state.raf = requestAnimationFrame(wave);
@@ -865,11 +1082,13 @@ function setAudio(blob, name) {
   state.blob = blob;
   if (state.recordURL) URL.revokeObjectURL(state.recordURL);
   state.recordURL = URL.createObjectURL(blob);
-  $('#preview').innerHTML = `
-    <p><b>${esc(name)}</b></p>
+  const preview = $('#preview');
+  if (preview) preview.innerHTML = `
+    <p><b translate="no">${esc(name)}</b></p>
     <audio class="audio" controls src="${state.recordURL}"></audio>
     <small>${Math.round(blob.size / 1024)} KB</small>
   `;
+  if (blob.size > AUDIO_MAX) toast('This recording is over 10 MB; it will stay on this device only.');
   updateRecordUI();
 }
 
@@ -880,6 +1099,7 @@ async function startRecording() {
   }
   try {
     state.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (disposed) { state.stream.getTracks().forEach(t => t.stop()); return; }
     const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
     const mime = types.find(t => MediaRecorder.isTypeSupported(t));
     state.recorder = new MediaRecorder(state.stream, mime ? { mimeType: mime } : undefined);
@@ -929,10 +1149,12 @@ function stopRecording() {
 }
 
 function parseIngredients(v) {
-  return v.split('\n').map(s => s.trim()).filter(Boolean).map(s => {
-    const a = s.split('|');
-    return { q: a.length > 1 ? a.shift().trim() : '', n: a.join('|').trim() || s };
-  });
+  return v.split('\n').map(s => s.trim()).filter(Boolean).map(parseLine);
+}
+
+function checkPhoto(photo) {
+  if (!PHOTO_TYPES.includes(photo.type)) throw Error('Photo must be a JPEG, PNG or WebP image');
+  if (photo.size > PHOTO_MAX) throw Error('Photo must be under 5 MB');
 }
 
 async function saveRecipe(e) {
@@ -961,26 +1183,48 @@ async function saveRecipe(e) {
     visibility: 'private',
     consent: false,
     created: Date.now(),
-    demo: false
+    demo: false,
+    owner: currentUid,
+    pendingMedia: []
   };
+  const submit = $('#recipe-form button[type="submit"]');
   try {
+    const photo = $('#photo').files[0];
+    if (photo) checkPhoto(photo);
+    if (submit) submit.disabled = true;
     if (state.blob) {
       recipe.audioId = id + '-audio';
       await put('blobs', { id: recipe.audioId, blob: state.blob });
+      if (state.blob.size <= AUDIO_MAX) recipe.pendingMedia.push(recipe.audioId);
     }
-    const photo = $('#photo').files[0];
     if (photo) {
-      if (!photo.type.startsWith('image/')) throw Error('Photo must be an image');
-      if (photo.size > 15e6) throw Error('Photo must be under 15 MB');
       recipe.photoId = id + '-photo';
       await put('blobs', { id: recipe.photoId, blob: photo });
+      recipe.pendingMedia.push(recipe.photoId);
     }
+    recipe.pendingSync = true;
+    recipe.databaseSynced = false;
     await put('recipes', recipe);
+    const res = await upsertDatabaseRecipe(recipe);
+    if (res.ok) {
+      const stored = await uploadRecipeMedia(fromRemote(res.value, recipe));
+      await put('recipes', stored);
+      toast('Family recipe saved');
+    } else if (res.status && res.status !== 401) {
+      toast('Saved on this device — ' + res.message);
+    } else if (vaultSync.error) {
+      toast('Saved on this device — ' + vaultSync.error);
+    } else if (vaultSync.signedIn) {
+      toast('Saved on this device — database sync is pending');
+    } else {
+      toast('Saved on this device — sign in to sync it to the database');
+    }
     state.blob = null;
-    toast('Family recipe saved privately');
-    location.hash = '#/vault';
+    if (!disposed) location.hash = '#/vault';
   } catch (err) {
     toast('Could not save: ' + err.message);
+  } finally {
+    if (submit) submit.disabled = false;
   }
 }
 
@@ -992,7 +1236,7 @@ function bindRecord() {
   $('#audio-upload').onchange = e => {
     const f = e.target.files[0];
     if (!f) return;
-    if (!f.type.startsWith('audio/') || f.size > 60e6) { toast('Please choose an audio file under 60 MB'); return; }
+    if (!f.type.startsWith('audio/') || f.size > AUDIO_MAX) { toast('Please choose an audio file under 10 MB'); e.target.value = ''; return; }
     setAudio(f, f.name);
   };
   $('#recipe-form').onsubmit = saveRecipe;
@@ -1008,14 +1252,14 @@ async function cookPage(id) {
   state.cook = r;
   state.index = 0;
   state.checked = new Set();
-  const audio = await blobURL(r.audioId);
+  const audio = await recipeMediaURL(r, 'audio');
   return `
     <section class="section">
-      <div class="wrap">
-        <a href="#/cookbook/${encodeURIComponent(r.id)}">&larr; Back to the recipe book</a>
+      <div class="wrap book-reading">
+        <a href="#/cookbook">← Back to cookbook</a>
         <div class="eyebrow" style="margin-top:22px">Cook with memories</div>
-        <h2>${esc(r.name)}</h2>
-        <p class="muted">${esc(r.region)} · ${esc(r.by)} · ${r.mins || 'Time not recorded'} min</p>
+        <h2 ${raw(r)}>${esc(r.name)}</h2>
+        <p class="muted"><span ${raw(r)}>${esc(r.region)}</span> · <span ${raw(r)}>${esc(r.by)}</span> · ${r.mins || 'Time not recorded'} min</p>
         <div class="cook-layout">
           <div>
             <div class="progress"><div id="progress"></div></div>
@@ -1024,20 +1268,20 @@ async function cookPage(id) {
               <div class="eyebrow" id="step-number"></div>
               <p id="step-text"></p>
               <div class="actions">
-                <button class="btn outline" id="previous">← Previous</button>
-                <button class="btn primary" id="next">Next step →</button>
+                <button class="btn outline" id="previous" type="button">← Previous</button>
+                <button class="btn primary" id="next" type="button">Next step →</button>
               </div>
             </div>
-            ${r.tips ? `<div class="message"><b>Family tip:</b> ${esc(r.tips)}</div>` : ''}
-            ${r.story ? `<div class="form-card" style="margin-top:20px"><h3>♥ The story</h3><p>${esc(r.story)}</p></div>` : ''}
+            ${r.tips ? `<div class="message"><b>Family tip:</b> <span ${raw(r)}>${esc(r.tips)}</span></div>` : ''}
+            ${r.story ? `<div class="form-card" style="margin-top:20px"><h3>♥ The story</h3><p ${raw(r)}>${esc(r.story)}</p></div>` : ''}
           </div>
           <div>
             <div class="form-card">
               <h3>Ingredients checklist</h3>
-              ${r.ingredients.map((i, k) => `
+              ${(r.ingredients || []).map((i, k) => `
                 <label class="ingredient">
                   <input type="checkbox" data-ing="${k}">
-                  <span><b>${esc(i.q)}</b> ${esc(i.n)}</span>
+                  <span ${raw(r)}><b>${esc(i.q)}</b> ${esc(i.n)}</span>
                 </label>
               `).join('')}
             </div>
@@ -1046,8 +1290,8 @@ async function cookPage(id) {
               ${audio
                 ? `<audio class="audio" id="cook-audio" controls src="${audio}"></audio>
                    <div class="actions">
-                     <button class="btn outline small" id="back10">↶ 10 seconds</button>
-                     <button class="btn outline small" id="forward10">10 seconds ↷</button>
+                     <button class="btn outline small" id="back10" type="button">↶ 10 seconds</button>
+                     <button class="btn outline small" id="forward10" type="button">10 seconds ↷</button>
                    </div>`
                 : '<p class="muted">No original voice is attached to this recipe.</p>'}
               <p class="muted" style="font-size:12px">Audio is not automatically synced with the cooking steps.</p>
@@ -1062,13 +1306,17 @@ async function cookPage(id) {
 function renderStep() {
   const r = state.cook;
   if (!r || !$('#step-text')) return;
-  $('#step-number').textContent = `Step ${state.index + 1} of ${r.steps.length}`;
-  $('#step-text').textContent = r.steps[state.index];
+  const steps = r.steps || [];
+  const ingredients = r.ingredients || [];
+  $('#step-number').textContent = `Step ${state.index + 1} of ${steps.length}`;
+  $('#step-text').setAttribute('translate', r.demo ? 'yes' : 'no');
+  $('#step-text').textContent = steps[state.index] || '';
   $('#previous').disabled = state.index === 0;
-  $('#next').textContent = state.index === r.steps.length - 1 ? 'Finish ✓' : 'Next step →';
-  const p = Math.round((state.index + state.checked.size) / (r.steps.length + r.ingredients.length) * 100);
+  $('#next').textContent = state.index >= steps.length - 1 ? 'Finish ✓' : 'Next step →';
+  const total = steps.length + ingredients.length;
+  const p = total ? Math.round((state.index + state.checked.size) / total * 100) : 0;
   $('#progress').style.width = p + '%';
-  $('#progress-text').textContent = `${state.index} steps navigated · ${state.checked.size}/${r.ingredients.length} ingredients checked`;
+  $('#progress-text').textContent = `${state.index} steps navigated · ${state.checked.size}/${ingredients.length} ingredients checked`;
 }
 
 function bindCook() {
@@ -1076,13 +1324,13 @@ function bindCook() {
   renderStep();
   $('#previous').onclick = () => { state.index = Math.max(0, state.index - 1); renderStep(); };
   $('#next').onclick = () => {
-    if (state.index === state.cook.steps.length - 1) { toast('Enjoy your meal! ♥'); return; }
+    if (state.index >= (state.cook.steps || []).length - 1) { toast('Enjoy your meal! ♥'); return; }
     state.index++;
     renderStep();
   };
   $$('[data-ing]').forEach(el => el.onchange = () => {
     const k = Number(el.dataset.ing);
-    el.checked ? state.checked.add(k) : state.checked.delete(k);
+    if (el.checked) state.checked.add(k); else state.checked.delete(k);
     renderStep();
   });
   if ($('#cook-audio')) {
@@ -1092,64 +1340,79 @@ function bindCook() {
 }
 
 // ----------------------------------------------------------
-// RENDER: VAULT
+// RENDER: VAULT (private drafts + consented public community recipes)
 // ----------------------------------------------------------
 async function vaultPage() {
   const mine = cache.filter(r => !r.demo);
+  let publicRecipes = [];
+  try { publicRecipes = await api.rasoi.publicList(); } catch {}
   let html = `
     <section class="section">
       <div class="wrap">
         <div class="eyebrow">Private family legacy</div>
-        <h2>Your memory vault.</h2>
-        <p class="muted">Your personal recipes, voices and memories are stored locally in this browser. Marking a recipe “Shared” does not publish it online.</p>
+        <h2>Community recipe vault — share with explicit consent.</h2>
+        ${vaultSync.error ? `<div class="message error">${esc(vaultSync.error)}</div>` : ''}
+        ${!vaultSync.signedIn && vaultSync.online ? '<div class="message">Sign in to sync your family recipes to your Mirava account. Until then they stay on this device.</div>' : ''}
+        ${ctx.isGuest && vaultSync.signedIn ? '<div class="message">You are exploring as a guest. <a href="/signup" data-rr-signup><u>Create an account</u></a> to keep your family recipes safe.</div>' : ''}
         <div class="actions">
           <a class="btn dark" href="#/record">+ Preserve another recipe</a>
-          <button class="btn outline" id="export-all">↓ Export recipe backup</button>
-        </div>
-        <div class="sample-warning">
-          Audio and photos are <b>not included</b> in the JSON recipe backup. Download them individually below. Keep secure copies outside your browser to avoid accidental loss.
+          <button class="btn outline" id="export-all" type="button">↓ Export recipe backup</button>
         </div>
   `;
-  if (!mine.length) {
-    html += '<div class="empty">Your vault is waiting for its first story. <a href="#/record"><u>Preserve a recipe →</u></a></div>';
-  }
+  html += '<h3 style="margin:28px 0 12px">Public community recipes</h3>';
+  if (!publicRecipes.length) html += '<p class="muted">No community recipes have been published with consent yet.</p>';
+  publicRecipes.forEach(entry => {
+    const ing = Array.isArray(entry.ingredients) ? entry.ingredients : [];
+    const steps = Array.isArray(entry.steps) ? entry.steps : [];
+    const item = x => typeof x === 'string' ? x : ingText(x);
+    html += `<article class="vault-card" style="padding:22px;margin-bottom:16px"><h3 translate="no">${esc(entry.name)}</h3><p class="muted"><span translate="no">${esc(entry.region)}</span> · Contributed by <span translate="no">${esc(entry.by)}</span></p><details><summary>See recipe and instructions</summary><h4>Ingredients</h4><ul translate="no">${ing.map(i => `<li>${esc(item(i))}</li>`).join('')}</ul><h4>Method</h4><ol translate="no">${steps.map(i => `<li>${esc(item(i))}</li>`).join('')}</ol>${entry.tips ? `<p><b>Kitchen note:</b> <span translate="no">${esc(entry.tips)}</span></p>` : ''}</details></article>`;
+  });
+  html += '<h3 style="margin:28px 0 12px">Your contributions and drafts</h3>';
+  if (!mine.length) html += '<div class="empty">No personal drafts yet. <a href="#/record"><u>Preserve a recipe →</u></a></div>';
   for (const r of mine) {
-    const audio = await blobURL(r.audioId);
+    const audio = await recipeMediaURL(r, 'audio');
+    const status = r.pendingSync ? '<span class="tag">Saved on this device — sync pending</span>'
+      : r.visibility === 'shared' ? '<span class="tag">✦ Public</span>' : '<span class="tag">Draft</span>';
     html += `
       <article class="vault-card" id="vault-${esc(r.id)}">
         <div class="vault-layout">
           <div>
-            <div class="eyebrow">${esc(r.region)}</div>
-            <h3>${esc(r.name)}</h3>
-            <p class="muted">Shared by ${esc(r.by)}</p>
+            <div class="eyebrow"><span translate="no">${esc(r.region)}</span></div>
+            <h3 translate="no">${esc(r.name)}</h3>
+            <p class="muted">Shared by <span translate="no">${esc(r.by)}</span></p>
+            <p>${status}</p>
             ${audio
               ? `<audio class="audio" controls src="${audio}"></audio>
                  <a class="btn outline small" href="${audio}" download="${esc(r.name)}-voice.webm">↓ Download audio</a>`
               : '<p class="muted">No recording attached.</p>'}
             ${r.photoURL
-              ? `<div><img src="${r.photoURL}" alt="${esc(r.name)}" style="width:180px;max-width:100%;border-radius:12px;margin-top:15px"></div>
-                 <a class="btn outline small" href="${r.photoURL}" download="${esc(r.name)}-photo">↓ Download photo</a>`
+              ? `<div><img src="${esc(r.photoURL)}" alt="${esc(r.name)}" style="width:180px;max-width:100%;border-radius:12px;margin-top:15px"></div>
+                 <a class="btn outline small" href="${esc(r.photoURL)}" download="${esc(r.name)}-photo">↓ Download photo</a>`
               : ''}
           </div>
           <div class="form-grid">
-            <div class="field wide"><label>Family story</label><textarea data-key="story" rows="3">${esc(r.story)}</textarea></div>
-            <div class="field wide"><label>Personal notes</label><textarea data-key="notes" rows="2">${esc(r.notes)}</textarea></div>
-            <div class="field wide"><label>Celebration memories</label><textarea data-key="memory" rows="2">${esc(r.memory)}</textarea></div>
+            <div class="field wide"><label>Family story</label><textarea data-key="story" rows="3" translate="no">${esc(r.story)}</textarea></div>
+            <div class="field wide"><label>Personal notes</label><textarea data-key="notes" rows="2" translate="no">${esc(r.notes)}</textarea></div>
+            <div class="field wide"><label>Celebration memories</label><textarea data-key="memory" rows="2" translate="no">${esc(r.memory)}</textarea></div>
             <div class="field">
               <label>Visibility label</label>
               <select data-key="visibility">
-                <option value="private" ${r.visibility === 'private' ? 'selected' : ''}>Private</option>
-                <option value="shared" ${r.visibility === 'shared' ? 'selected' : ''}>Shared (local label only)</option>
+                <option value="private" ${r.visibility !== 'shared' ? 'selected' : ''}>Draft — only you can see it</option>
+                <option value="shared" ${r.visibility === 'shared' ? 'selected' : ''}>Public — requires consent</option>
               </select>
             </div>
-            <div class="field"><label>Replace photo</label><input data-photo type="file" accept="image/*"></div>
+            <div class="field"><label>Replace photo</label><input data-photo type="file" accept="image/jpeg,image/png,image/webp"></div>
             <label class="wide"><input type="checkbox" data-key="consent" ${r.consent ? 'checked' : ''}> Everyone featured has consented to sharing.</label>
+            <p class="muted wide" style="font-size:12px;margin:0">Public recipes are checked by an AI screen before they are published. AI can check plausibility, not prove traditional authenticity.</p>
+            <div class="wide" data-share-msg hidden></div>
             <div class="actions wide">
-              <button class="btn dark small" data-save="${esc(r.id)}">Save changes</button>
+              <button class="btn dark small" type="button" data-save="${esc(r.id)}">Save changes</button>
+              <button class="btn outline small" type="button" data-review="${esc(r.id)}">✦ AI review</button>
               <a class="btn outline small" href="#/cookbook/${encodeURIComponent(r.id)}">Read in the book</a>
               <a class="btn outline small" href="#/cook/${encodeURIComponent(r.id)}">Cook this</a>
-              <button class="btn outline small" data-delete="${esc(r.id)}">Delete</button>
+              <button class="btn outline small" type="button" data-delete="${esc(r.id)}">Delete</button>
             </div>
+            <div class="wide" data-review-out hidden></div>
           </div>
         </div>
       </article>
@@ -1158,36 +1421,123 @@ async function vaultPage() {
   return html + '</div></section>';
 }
 
-async function saveVault(id) {
+function showCardMessage(el, selector, html, error = false) {
+  const box = $(selector, el);
+  if (!box) return;
+  box.hidden = !html;
+  box.innerHTML = html ? `<div class="message${error ? ' error' : ''}">${html}</div>` : '';
+}
+
+async function saveVault(id, button) {
   const el = root.querySelector('#vault-' + CSS.escape(id));
-  const r = await get('recipes', id);
+  const r = await get('recipes', id) || cache.find(x => x.id === id && !x.demo);
+  if (!el || !r) { toast('Recipe not found.'); return; }
   const field = k => $(`[data-key="${k}"]`, el);
-  if (field('visibility').value === 'shared' && !field('consent').checked) {
+  const visibility = field('visibility').value === 'shared' ? 'shared' : 'private';
+  const consent = field('consent').checked;
+  if (visibility === 'shared' && !consent) {
     toast('Consent required to mark shared');
     return;
   }
-  for (const k of ['story', 'notes', 'memory', 'visibility']) r[k] = field(k).value.trim();
-  r.consent = field('consent').checked;
+  if (visibility === 'shared' && !vaultSync.signedIn) {
+    toast(vaultSync.online ? 'Sign in to publish recipes publicly' : 'Public sharing needs a connection. Save it as a draft for now.');
+    return;
+  }
+  const next = { ...r, visibility, consent: visibility === 'shared' && consent, pendingMedia: [...(r.pendingMedia || [])] };
+  delete next.photoURL;
+  for (const k of ['story', 'notes', 'memory']) next[k] = field(k).value.trim();
   const photo = $('[data-photo]', el).files[0];
+  showCardMessage(el, '[data-share-msg]', '');
   try {
     if (photo) {
-      if (!photo.type.startsWith('image/') || photo.size > 15e6) throw Error('Choose an image under 15 MB');
-      r.photoId = id + '-photo';
-      await put('blobs', { id: r.photoId, blob: photo });
+      checkPhoto(photo);
+      next.photoId = id + '-photo';
+      await put('blobs', { id: next.photoId, blob: photo });
+      if (!next.pendingMedia.includes(next.photoId)) next.pendingMedia.push(next.photoId);
     }
-    await put('recipes', r);
-    toast('Vault updated');
+    if (button) { button.disabled = true; button.textContent = visibility === 'shared' ? 'Screening…' : 'Saving…'; }
+    const res = await upsertDatabaseRecipe(next);
+    if (disposed) return;
+    if (res.ok) {
+      const stored = await uploadRecipeMedia(fromRemote(res.value, next));
+      await put('recipes', stored);
+      toast(visibility === 'shared' && r.visibility !== 'shared' ? 'Recipe published to the community vault' : 'Recipe updated');
+    } else if (visibility === 'shared' && res.status === 422) {
+      // The server-side AI screen asked for a human review: nothing was published.
+      showCardMessage(el, '[data-share-msg]', `${esc(res.message)}<br><small>Edit the recipe and try again, or keep it as a draft.</small>`, true);
+      toast('Not published — the recipe needs review');
+      return;
+    } else if (visibility === 'shared' && (res.status === 503 || res.status === 429)) {
+      showCardMessage(el, '[data-share-msg]', `${esc(res.message)}<br><small>Choose “Draft — only you can see it” to save your changes privately.</small>`, true);
+      toast('Public sharing is unavailable right now — save privately instead');
+      return;
+    } else if (res.status && res.status !== 401) {
+      showCardMessage(el, '[data-share-msg]', esc(res.message), true);
+      toast('Could not save: ' + res.message);
+      return;
+    } else {
+      // Offline or signed out: keep a device copy that syncs later.
+      await put('recipes', { ...next, pendingSync: true });
+      toast(vaultSync.error
+        ? 'Changes saved on this device — ' + vaultSync.error
+        : vaultSync.signedIn ? 'Changes saved locally — sync pending' : 'Changes saved on this device — sign in to sync');
+    }
     render();
-  } catch (e) { toast(e.message); }
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    if (button && !disposed) { button.disabled = false; button.textContent = 'Save changes'; }
+  }
+}
+
+async function reviewRecipe(id, button) {
+  const el = root.querySelector('#vault-' + CSS.escape(id));
+  const r = cache.find(x => x.id === id && !x.demo);
+  if (!el || !r) return;
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Reviewing…';
+  showCardMessage(el, '[data-review-out]', '');
+  try {
+    const res = await api.rasoi.review({
+      name: r.name,
+      ingredients: (r.ingredients || []).map(ingText).filter(Boolean).slice(0, 50),
+      steps: (r.steps || []).slice(0, 35)
+    });
+    if (disposed) return;
+    showCardMessage(el, '[data-review-out]',
+      `<b>AI review</b><p translate="no" style="white-space:pre-wrap;margin:8px 0">${esc(res.review)}</p><small>${esc(res.disclaimer)}</small>`);
+  } catch (err) {
+    if (disposed) return;
+    const msg = err instanceof ApiError
+      ? (err.status === 401 ? 'Sign in before requesting a recipe check.' : err.message)
+      : 'The AI review could not be reached. Check your connection and try again.';
+    showCardMessage(el, '[data-review-out]', esc(msg), true);
+  } finally {
+    if (!disposed) { button.disabled = false; button.textContent = label; }
+  }
 }
 
 async function deleteRecipe(id) {
   if (!confirm('Permanently delete this recipe and its saved media?')) return;
-  const r = await get('recipes', id);
-  if (r.audioId) await remove('blobs', r.audioId);
-  if (r.photoId) await remove('blobs', r.photoId);
+  const r = await get('recipes', id) || cache.find(x => x.id === id && !x.demo);
+  let deletedFromDatabase = false;
+  if (r?.databaseSynced) {
+    const res = await vaultCall(() => api.rasoi.remove(id));
+    deletedFromDatabase = res.ok || res.status === 404;
+    if (!deletedFromDatabase && vaultSync.signedIn && vaultSync.online) {
+      toast('Could not delete the database copy: ' + (res.message || 'try again'));
+      return;
+    }
+    if (!deletedFromDatabase) { toast('You are offline — try deleting again when connected.'); return; }
+  }
+  if (r?.audioId) await remove('blobs', r.audioId);
+  if (r?.photoId) await remove('blobs', r.photoId);
   await remove('recipes', id);
-  toast('Recipe deleted');
+  mediaIndex.delete(id);
+  for (const [key, url] of remoteURLs) if (key.startsWith(id + '/')) { URL.revokeObjectURL(url); remoteURLs.delete(key); }
+  favourites.saved.delete(id); favourites.cooked.delete(id);
+  toast(deletedFromDatabase ? 'Recipe deleted from your vault and this device' : 'Recipe deleted from this device');
   render();
 }
 
@@ -1203,11 +1553,16 @@ function downloadFile(name, content, type) {
 }
 
 function bindVault() {
-  $$('[data-save]').forEach(b => b.onclick = () => saveVault(b.dataset.save));
+  $$('[data-save]').forEach(b => b.onclick = () => saveVault(b.dataset.save, b));
+  $$('[data-review]').forEach(b => b.onclick = () => reviewRecipe(b.dataset.review, b));
   $$('[data-delete]').forEach(b => b.onclick = () => deleteRecipe(b.dataset.delete));
+  const signup = $('[data-rr-signup]');
+  if (signup) signup.onclick = e => { e.preventDefault(); ctx.navigate('/signup'); };
   $('#export-all').onclick = () => downloadFile(
     'rasoi-family-recipes.json',
-    JSON.stringify(cache.filter(r => !r.demo).map(({ photoURL, ...r }) => r), null, 2),
+    JSON.stringify(cache.filter(r => !r.demo).map(r => ({
+      ...databasePayload(r), audioId: r.audioId, photoId: r.photoId
+    })), null, 2),
     'application/json'
   );
 }
@@ -1217,23 +1572,32 @@ function bindVault() {
 // ----------------------------------------------------------
 let rendering = 0;
 
+function stopBookTimers() {
+  clearTimeout(bookTurnTimer);
+  clearTimeout(bookSettleTimer);
+  bookTurning = false;
+  bookOpen = false;
+}
+
 async function render() {
   const token = ++rendering;
   let route;
-  try { route = decodeURIComponent((location.hash || '#/').slice(1)); } catch (_) { route = '/'; }
-  bookDispose();
+  try { route = decodeURIComponent((location.hash || '#/').slice(1)); } catch { route = '/'; }
+  stopBookTimers();
 
   // Stop recording if navigating away
   if (state.mode !== 'idle' && !route.startsWith('/record')) {
     if (state.recorder?.state !== 'inactive') state.recorder?.stop();
     state.stream?.getTracks().forEach(t => t.stop());
+    cancelAnimationFrame(state.raf);
     state.mode = 'idle';
   }
 
-  urls.forEach(u => URL.revokeObjectURL(u));
+  const stale = urls;
   urls = [];
 
   await refresh();
+  stale.forEach(u => URL.revokeObjectURL(u));
   if (token !== rendering || disposed) return;
 
   const app = $('#app');
@@ -1263,14 +1627,22 @@ async function render() {
 window.addEventListener('hashchange', render);
 cleanups.push(() => window.removeEventListener('hashchange', render));
 
-// Keyboard navigation on cook page
-const onCookKey = e => {
-  if (!location.hash.startsWith('#/cook/') || /INPUT|TEXTAREA|SELECT|BUTTON/.test(document.activeElement.tagName)) return;
-  if (e.key === 'ArrowRight' && $('#next')) $('#next').click();
-  if (e.key === 'ArrowLeft' && $('#previous')) $('#previous').click();
+// Keyboard navigation for the focused cooking view and the physical cookbook
+const onKey = e => {
+  if (/INPUT|TEXTAREA|SELECT|BUTTON/.test(document.activeElement?.tagName || '')) return;
+  if (location.hash.startsWith('#/cook/')) {
+    if (e.key === 'ArrowRight' && $('#next')) $('#next').click();
+    if (e.key === 'ArrowLeft' && $('#previous')) $('#previous').click();
+    return;
+  }
+  if (location.hash.startsWith('#/cookbook') && bookOpen) {
+    if (e.key === 'ArrowRight') turnBook(1);
+    if (e.key === 'ArrowLeft') turnBook(-1);
+    if (e.key === 'Escape') closeBook();
+  }
 };
-window.addEventListener('keydown', onCookKey);
-cleanups.push(() => window.removeEventListener('keydown', onCookKey));
+window.addEventListener('keydown', onKey);
+cleanups.push(() => window.removeEventListener('keydown', onKey));
 
 // ----------------------------------------------------------
 // PROGRESSIVE ENHANCEMENT: SCROLL & REVEAL
@@ -1309,13 +1681,13 @@ cleanups.push(() => window.removeEventListener('keydown', onCookKey));
     }
   }, { threshold: .09, rootMargin: '0px 0px 35px 0px' });
 
-  function register(root) {
+  function register(node) {
     const selector = '.feature,.recipe-card,.section-head,.story-note,.story-grid > div,.form-card,.vault-card,.step';
     const nodes = [];
-    if (root.nodeType === 1 && root.matches?.(selector)) nodes.push(root);
-    if (root.querySelectorAll) nodes.push(...root.querySelectorAll(selector));
+    if (node.nodeType === 1 && node.matches?.(selector)) nodes.push(node);
+    if (node.querySelectorAll) nodes.push(...node.querySelectorAll(selector));
     for (const el of nodes) {
-      if (el.dataset.motionReady) return;
+      if (el.dataset.motionReady) continue;
       el.dataset.motionReady = '1';
       el.classList.add('reveal-motion');
       io.observe(el);
@@ -1339,7 +1711,7 @@ cleanups.push(() => window.removeEventListener('keydown', onCookKey));
 // BOOT
 // ----------------------------------------------------------
 (async () => {
-  const [opened] = await Promise.all([openDB(), bookLoadState()]);
+  const [opened] = await Promise.all([openDB(), loadFavourites()]);
   if (disposed) { opened?.close(); return; }
   db = opened;
   if (!db) toast('Browser storage unavailable: recipes last only this session');
@@ -1349,20 +1721,22 @@ cleanups.push(() => window.removeEventListener('keydown', onCookKey));
 return () => {
   disposed = true;
   rendering++;
-  bookDispose();
+  stopBookTimers();
   // Flush a pending bookmark/position save immediately.
   if (saveTimer) {
     clearTimeout(saveTimer);
-    ctx.saveState(STATE_KEY, { bookmarks: [...book.saved], cooked: [...book.cooked], last: book.activeId || '' });
+    ctx.saveState(STATE_KEY, favouritesPayload());
   }
   clearTimeout(toastTimer);
   cancelAnimationFrame(state.raf);
-  try { if (state.recorder && state.recorder.state !== 'inactive') { state.recorder.onstop = null; state.recorder.stop(); } } catch (_) {}
+  try { if (state.recorder && state.recorder.state !== 'inactive') { state.recorder.onstop = null; state.recorder.stop(); } } catch {}
   state.stream?.getTracks().forEach(t => t.stop());
-  try { state.ctx?.close(); } catch (_) {}
+  try { state.ctx?.close(); } catch {}
   if (state.recordURL) URL.revokeObjectURL(state.recordURL);
   urls.forEach(u => URL.revokeObjectURL(u));
   urls = [];
+  remoteURLs.forEach(u => URL.revokeObjectURL(u));
+  remoteURLs.clear();
   for (const fn of cleanups.reverse()) fn();
   db?.close();
 };

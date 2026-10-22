@@ -34,3 +34,22 @@ def test_question_set_keeps_correct_answer():
     for p in picked:
         src = by_id[p["id"]]
         assert p["options"][p["answer"]] == src.options[src.answer]
+
+
+def test_daily_rotation_has_no_repeats_within_cycle():
+    from datetime import timedelta
+
+    qs = [SimpleNamespace(id=f"Q{i:04d}", options=["a", "b", "c"], answer=0, is_active=True) for i in range(100)]
+
+    class FakeDB:
+        def scalars(self, _):
+            return SimpleNamespace(all=lambda: qs)
+
+    days_per_cycle = 10
+    start = date(2026, 1, 1)
+    start = start - timedelta(days=start.toordinal() % days_per_cycle)  # align to a cycle boundary
+    seen = []
+    for d in range(days_per_cycle):
+        seen += [q["id"] for q in engine.daily_question_set(FakeDB(), start + timedelta(days=d))]
+    assert len(seen) == 100 and len(set(seen)) == 100
+    assert engine.daily_question_set(FakeDB(), start) == engine.daily_question_set(FakeDB(), start)

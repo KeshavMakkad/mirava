@@ -1,9 +1,10 @@
 /**
- * Static markup of Mirava Gaṇita (from legacy/vedicmaths.html). engine.js fills the
+ * Static markup of Mirava Gaṇita (from vedicmaths.html). engine.js fills the
  * dynamic regions, so these components are memoised and never re-render.
  */
 import { memo } from 'react'
 import { Link } from 'react-router-dom'
+import { HabitPractice } from './HabitPractice'
 
 function Header() {
   return (
@@ -66,7 +67,9 @@ function Hero() {
           <div className="dh">
             <div>
               <div className="k" id="dK">
-                Ūrdhva-Tiryagbhyām
+                <span lang="sa-Latn" translate="no">
+                  Ūrdhva-Tiryagbhyām
+                </span>
               </div>
               <div className="dq" id="dQ">
                 23 × 41
@@ -178,7 +181,7 @@ function Lab() {
           <div className="mhead">
             <div>
               <h3 id="mName"></h3>
-              <div className="dv" id="mDev"></div>
+              <div className="dv" id="mDev" lang="sa" translate="no"></div>
               <p id="mDesc"></p>
             </div>
           </div>
@@ -220,12 +223,35 @@ function Sutras() {
       </div>
       <div className="sgrid" id="sgrid"></div>
       <div className="subs">
-        <b>Sub-sutras used on this page:</b> <span className="dev">आनुरूप्येण</span> <i>Ānurūpyeṇa</i>{' '}
-        (proportionately: working bases such as 50), <span className="dev">अन्त्ययोर्दशकेऽपि</span>{' '}
-        <i>Antyayordaśake'pi</i> (last digits summing to ten, used with Ekādhika),{' '}
-        <span className="dev">यावदूनं तावदूनीकृत्य वर्गं च योजयेत्</span>{' '}
-        <i>Yāvadūnaṁ tāvadūnīkṛtya vargaṁ ca yojayet</i> (squares near a base) and{' '}
-        <span className="dev">विलोकनम्</span> <i>Vilokanam</i> (by observation: the root tricks).
+        <b>Sub-sutras used on this page:</b>{' '}
+        <span className="dev" lang="sa" translate="no">
+          आनुरूप्येण
+        </span>{' '}
+        <i lang="sa-Latn" translate="no">
+          Ānurūpyeṇa
+        </i>{' '}
+        (proportionately: working bases such as 50),{' '}
+        <span className="dev" lang="sa" translate="no">
+          अन्त्ययोर्दशकेऽपि
+        </span>{' '}
+        <i lang="sa-Latn" translate="no">
+          Antyayordaśake'pi
+        </i>{' '}
+        (last digits summing to ten, used with Ekādhika),{' '}
+        <span className="dev" lang="sa" translate="no">
+          यावदूनं तावदूनीकृत्य वर्गं च योजयेत्
+        </span>{' '}
+        <i lang="sa-Latn" translate="no">
+          Yāvadūnaṁ tāvadūnīkṛtya vargaṁ ca yojayet
+        </i>{' '}
+        (squares near a base) and{' '}
+        <span className="dev" lang="sa" translate="no">
+          विलोकनम्
+        </span>{' '}
+        <i lang="sa-Latn" translate="no">
+          Vilokanam
+        </i>{' '}
+        (by observation: the root tricks).
       </div>
     </section>
   )
@@ -699,20 +725,14 @@ function Heist() {
   )
 }
 
-/**
- * The legacy page's script rendered TIMELINE into `#tl` and the nav links to
- * `#heritage`, but the section itself was missing from the HTML (which made the
- * legacy script throw). Restored here so the nav link and timeline data work.
- */
+/** Timeline section (`#tl` is filled from TIMELINE by the engine). */
 function Heritage() {
   return (
     <section className="wrap sec" id="heritage">
       <div className="sh">
         <div>
-          <div className="k">Mathematics in India</div>
-          <h2>
-            A living <em>heritage</em>
-          </h2>
+          <div className="k">Indian heritage</div>
+          <h2>Mathematics through time</h2>
         </div>
       </div>
       <div className="tl" id="tl"></div>
@@ -734,6 +754,7 @@ export const VedicMarkup = memo(function VedicMarkup() {
         <Heritage />
       </main>
       <div className="toasts" id="toasts" aria-live="polite"></div>
+      <HabitPractice />
     </>
   )
 })

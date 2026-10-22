@@ -7,8 +7,7 @@
      localStorage (mqa_save_*, mqa_guest, miravaQuizXP, miravaProgressV3…)
    - every finished run is submitted to the server (games/quiz-arena) which
      grants Mirava XP and feeds the Quiz Arena leaderboard
-   - the leaderboard screen is React (LeaderboardPanel); this module only
-     renders the AI-rival benchmarks into #boardRivals
+   - the leaderboard screen ("Hall of Scholars") is React (LeaderboardPanel)
    ===================================================================== */
 import { ACH, BANK, RIVALS, TITLES } from './data.js'
 
@@ -20,6 +19,8 @@ const ri = n => Math.floor(Math.random() * n)
 function shuffle(a, rng) { rng = rng || Math.random; a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]] } return a }
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) } return h >>> 0 }
+/** Runtime translation with our own Hindi fallback for strings missing from /locales. */
+const tx = (en, hi) => { const I = window.MiravaI18n; if (!I || I.language() !== 'hi') return en; const out = I.t(en); return out === en && hi ? hi : out }
 const pad2 = n => String(n).padStart(2, '0')
 const dstr = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate())
 const today = () => dstr(new Date())
@@ -167,7 +168,7 @@ export function initArena(root, ctx, hooks = {}) {
     if (screen === 'play' && RUN && !RUN.ended && name !== 'result') { quitRun(() => go(name)); return }
     screen = name; screens().forEach(s => s.classList.toggle('on', s.id === 's-' + name))
     root.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.go === name || (name === 'region' && b.dataset.go === 'campaign')))
-    const R = { hub: renderHub, campaign: renderCampaign, rivals: renderRivals, stats: renderStats, board: renderBoard }; if (R[name]) R[name]()
+    const R = { hub: renderHub, campaign: renderCampaign, rivals: renderRivals, stats: renderStats }; if (R[name]) R[name]()
     scrollTop()
   }
   function showScreen(name) { screen = name; screens().forEach(s => s.classList.toggle('on', s.id === 's-' + name)); scrollTop() }
@@ -181,7 +182,7 @@ export function initArena(root, ctx, hooks = {}) {
     const st = dailyStreakNow()
     el.innerHTML = `${st ? `<span class="streak-pill" title="Daily Darshan streak">🔥 ${st}</span>` : ''}
  <button class="ico" id="sndBtn" title="Sound">${P.sound ? '🔊' : '🔇'}</button>
- <div class="chip" id="meChip" title="Your arena stats"><div class="av"><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="21" stroke="rgba(255,255,255,.12)" stroke-width="3" fill="none"/><circle cx="23" cy="23" r="21" stroke="#f8c950" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct)}"/></svg>${esc(initials(P.name))}</div><div><b>${esc(P.name)}</b><small>Lv ${L} · ${P.xp} XP</small></div></div>`
+ <div class="chip" id="meChip" title="Your arena stats"><div class="av"><svg viewBox="0 0 46 46"><circle cx="23" cy="23" r="21" stroke="rgba(255,255,255,.12)" stroke-width="3" fill="none"/><circle cx="23" cy="23" r="21" stroke="#f8c950" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct)}"/></svg>${esc(initials(P.name))}</div><div><b translate="no">${esc(P.name)}</b><small>Lv ${L} · ${P.xp} XP</small></div></div>`
     $('sndBtn').onclick = () => { P.sound = !P.sound; save(); Sound.init(); renderTop() }
     $('meChip').onclick = () => go('stats')
   }
@@ -192,9 +193,9 @@ export function initArena(root, ctx, hooks = {}) {
     const cal = Array.from({ length: 14 }, (_, i) => { const d = addDays(td, i - 13); return `<i class="${P.daily.hist[d] ? 'on' : ''}" title="${d}"></i>` }).join('')
     const nextM = (() => { for (const r of BANK) { const ix = RIDX(r.id); if (!regionUnlocked(ix)) break; for (let mi = 0; mi < r.missions.length; mi++) if (!starsOf(r.id, mi)) return { r, mi } } return null })()
     const hour = new Date().getHours(), greet = hour < 12 ? 'Suprabhat' : hour < 17 ? 'Namaste' : 'Shubh sandhya'
-    const guest = ctx.isGuest ? `<p class="qa-guest">You're playing as a guest — your progress is saved to this guest account but guests aren't ranked on the leaderboard. <a href="/signup" data-nav="/signup">Create an account</a> to keep it for good.</p>` : ''
+    const guest = ctx.isGuest ? `<p class="qa-guest">${tx("You're playing as a guest — your progress is saved to this guest account, but only signed-in players publish XP to the Hall of Scholars.", 'आप अतिथि के रूप में खेल रहे हैं — आपकी प्रगति इस अतिथि खाते में सहेजी जाती है, लेकिन केवल साइन-इन खिलाड़ी ही विद्वानों की सभा में अनुभव अंक प्रकाशित करते हैं।')} <a href="/signup" data-nav="/signup">${tx('Create an account', 'खाता बनाएँ')}</a></p>` : ''
     $('s-hub').innerHTML = `<div class="wrap">${guest}
- <div class="hero"><div class="card hero-main">${MANDALA}<div class="k">${greet}, ${esc(P.name)} · Level ${L} ${titleOf(L)}</div>
+ <div class="hero"><div class="card hero-main">${MANDALA}<div class="k">${greet}, <span translate="no">${esc(P.name)}</span> · Level ${L} ${titleOf(L)}</div>
   <h1>Five thousand years.<br><em>Ten questions</em> at a time.</h1>
   <p>${nextM ? `Your journey continues with <b style="color:var(--cream)">${esc(nextM.r.missions[nextM.mi].name)}</b> in ${nextM.r.label}.` : 'Every mission is complete. Chase three stars everywhere — or take on Chanakya.'}</p>
   <div style="display:flex;gap:10px;flex-wrap:wrap">${nextM ? `<button class="btn gold" id="hCont">▶ Continue campaign</button>` : `<button class="btn gold" data-go="campaign">Open the campaign</button>`}<button class="btn" data-go="rivals">⚔️ Duel a rival</button></div></div>
@@ -276,7 +277,7 @@ export function initArena(root, ctx, hooks = {}) {
   <button class="life" id="lf-time" title="Add 10 seconds">⏳ +10s <kbd>T</kbd></button>
   <button class="life" id="lf-sage" title="Ask the sage for a hint">🪷 Ask the Sage <kbd>H</kbd></button>
   <button class="life" id="lf-skip" title="Skip this question">⏭️ Skip <kbd>S</kbd></button></div>` : ''
-    const rv = cfg.rival ? `<div class="card rival"><div class="rv"><div class="ra">${esc(initials(P.name))}</div><div><b>${esc(P.name)}</b><small id="rMe">0</small></div></div><div class="vs">VS</div><div class="rv r"><div><b>${cfg.rival.name}</b><small id="rThem">0</small><div class="rstate" id="rState">waiting…</div></div><div class="ra">${cfg.rival.av}</div></div></div>` : ''
+    const rv = cfg.rival ? `<div class="card rival"><div class="rv"><div class="ra">${esc(initials(P.name))}</div><div><b translate="no">${esc(P.name)}</b><small id="rMe">0</small></div></div><div class="vs">VS</div><div class="rv r"><div><b>${cfg.rival.name}</b><small id="rThem">0</small><div class="rstate" id="rState">waiting…</div></div><div class="ra">${cfg.rival.av}</div></div></div>` : ''
     $('s-play').innerHTML = `<div class="play"><div class="ptop"><div><div class="k">${esc(cfg.kicker)}</div><h2>${esc(cfg.title)}</h2></div><button class="btn sm" id="pQuit">✕ Quit</button></div>
  <div class="hud">${cfg.lives ? `<div class="hpill hearts" id="hearts">${'<span>❤️</span>'.repeat(cfg.lives)}</div>` : ''}<div class="hpill">⭐ <span id="pScore">0</span></div><div class="hpill combo" id="pCombo">🔥 ×1</div><div class="hpill" id="pCount"></div></div>
  ${cfg.total ? '<div class="gtimer"><i id="gBar" style="width:100%"></i></div>' : ''}${cfg.fixed ? `<div class="pips" id="pips">${'<i></i>'.repeat(cfg.questions.length)}</div>` : ''}${rv}
@@ -493,6 +494,11 @@ export function initArena(root, ctx, hooks = {}) {
   }
   function shareText(mode, d) {
     const grid = (d.g || '').split('').map(x => x === 'g' ? '🟩' : x === 'r' ? '🟥' : '⬛').join('')
+    const I = window.MiravaI18n
+    if (I && I.language() === 'hi') {
+      const heading = mode === 'daily' ? `मिरावा प्रश्नोत्तरी · दैनिक दर्शन ${today()}` : mode === 'duel' ? `मिरावा प्रश्नोत्तरी · ${I.t(d.rv.name)} ${d.win ? 'को मैंने हराया' : 'से मेरा मुकाबला हुआ'}` : `मिरावा प्रश्नोत्तरी · ${I.t(d.title)}`
+      return `${heading}\n${grid} ${d.c}/${d.t || 10}${d.stars ? '  ' + '⭐'.repeat(d.stars) : ''}\n⚡ ${d.s} अंक${dailyStreakNow() ? ` · 🔥 लगातार ${dailyStreakNow()} दिन` : ''}\nक्या आप मुझसे आगे निकल सकते हैं? मिरावा पर खेलें`
+    }
     const head = mode === 'daily' ? `Mirava Quiz Arena · Daily Darshan ${today()}` : mode === 'duel' ? `Mirava Quiz Arena · ${d.win ? 'I defeated' : 'I duelled'} ${d.rv.name}` : `Mirava Quiz Arena · ${d.title}`
     return `${head}\n${grid} ${d.c}/${d.t || 10}${d.stars ? '  ' + '⭐'.repeat(d.stars) : ''}\n⚡ ${d.s} pts${dailyStreakNow() ? ` · 🔥 ${dailyStreakNow()}-day streak` : ''}\nCan you beat me? Play at Mirava`
   }
@@ -501,19 +507,22 @@ export function initArena(root, ctx, hooks = {}) {
     const fallback = () => { const ta = document.createElement('textarea'); ta.value = t; root.appendChild(ta); ta.select(); try { document.execCommand('copy'); done() } catch { window.prompt('Copy your result:', t) } ta.remove() }
     if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(t).then(done, fallback); else fallback()
   }
-  function saveCard(d) {
+  async function saveCard(d) {
+    const I = window.MiravaI18n, tr = v => (I ? I.t(v) : v)
+    if (I) { try { await I.fontReady() } catch { /* draw with fallback fonts */ } }
+    if (disposed) return
     const cv = document.createElement('canvas'); cv.width = 1080; cv.height = 1080; const g = cv.getContext('2d')
     const bg = g.createLinearGradient(0, 0, 1080, 1080); bg.addColorStop(0, '#55232f'); bg.addColorStop(1, '#150c10'); g.fillStyle = bg; g.fillRect(0, 0, 1080, 1080)
     g.strokeStyle = 'rgba(241,180,60,.18)'; g.lineWidth = 2; for (let i = 0; i < 16; i++) { g.save(); g.translate(900, 180); g.rotate(i * Math.PI / 8); g.beginPath(); g.ellipse(0, -120, 30, 110, 0, 0, Math.PI * 2); g.stroke(); g.restore() }
     g.strokeStyle = '#f1b43c'; g.lineWidth = 6; g.strokeRect(40, 40, 1000, 1000)
-    g.fillStyle = '#f1b43c'; g.font = '500 28px "DM Mono"'; g.fillText('MIRAVA · QUIZ ARENA', 100, 140)
+    g.fillStyle = '#f1b43c'; g.font = '500 28px "DM Mono"'; g.fillText(tr('MIRAVA · QUIZ ARENA'), 100, 140)
     g.fillStyle = '#f5e6c8'; g.font = '700 76px "Playfair Display"'; wrap(g, d.mode === 'daily' ? 'Daily Darshan' : d.title, 100, 250, 880, 86)
     g.fillStyle = '#f8c950'; g.font = '800 200px "Playfair Display"'; g.fillText(`${d.c}/${d.t || 10}`, 100, 560)
     const cells = (d.g || '').split(''); const sz = Math.min(78, 880 / Math.max(cells.length, 1) - 8); cells.forEach((x, i) => { g.fillStyle = x === 'g' ? '#8ab372' : x === 'r' ? '#e58667' : '#6a5a56'; g.beginPath(); if (g.roundRect) g.roundRect(100 + i * (sz + 8), 620, sz, sz, 12); else g.rect(100 + i * (sz + 8), 620, sz, sz); g.fill() })
-    g.fillStyle = '#f5e6c8'; g.font = '600 40px Manrope'; g.fillText(`${d.s} points${d.stars ? '   ' + '★'.repeat(d.stars) : ''}`, 100, 800)
-    g.fillStyle = '#b8a89a'; g.font = '500 30px "DM Mono"'; g.fillText(`${P.name.toUpperCase()} · LEVEL ${levelOf(P.xp)} ${titleOf(levelOf(P.xp)).toUpperCase()}`, 100, 960); g.fillText(today(), 100, 1000)
+    g.fillStyle = '#f5e6c8'; g.font = '600 40px Manrope'; g.fillText(`${d.s} ${tr('points')}${d.stars ? '   ' + '★'.repeat(d.stars) : ''}`, 100, 800)
+    g.fillStyle = '#b8a89a'; g.font = '500 30px "DM Mono"'; const who = `${P.name.toUpperCase()} · ${tr('LEVEL')} ${levelOf(P.xp)} ${tr(titleOf(levelOf(P.xp))).toUpperCase()}`; if (I) I.drawLiteral(g, who, 100, 960); else g.fillText(who, 100, 960); g.fillText(today(), 100, 1000)
     const a = document.createElement('a'); a.download = 'mirava-quiz-result.png'; a.href = cv.toDataURL('image/png'); a.click(); toast('🖼️ Result card saved to your downloads.')
-    function wrap(c, t, x, y, w, lh) { const ws = t.split(' '); let line = ''; for (const wd of ws) { const tt = line + wd + ' '; if (c.measureText(tt).width > w && line) { c.fillText(line, x, y); line = wd + ' '; y += lh } else line = tt } c.fillText(line, x, y) }
+    function wrap(c, t, x, y, w, lh) { const ws = tr(t).split(' '); let line = ''; for (const wd of ws) { const tt = line + wd + ' '; if (c.measureText(tt).width > w && line) { c.fillText(line, x, y); line = wd + ' '; y += lh } else line = tt } c.fillText(line, x, y) }
   }
 
   /* ===================== RIVALS ===================== */
@@ -527,7 +536,7 @@ export function initArena(root, ctx, hooks = {}) {
   function renderStats() {
     const s = P.stats, L = levelOf(P.xp), a = xpFor(L), b = xpFor(L + 1)
     const heat = Array.from({ length: 84 }, (_, i) => { const d = addDays(today(), i - 83), n = P.act[d] || 0; return `<i class="${n ? n < 10 ? 'h1' : n < 25 ? 'h2' : n < 50 ? 'h3' : 'h4' : ''}" title="${d}: ${n} answers"></i>` }).join('')
-    $('s-stats').innerHTML = `<div class="wrap"><div class="sec" style="margin-top:0"><div><div class="k">Profile</div><h2 style="font-size:36px">${esc(P.name)}</h2><p class="mono" style="color:var(--gold-t);font-size:12px;margin-top:4px">LEVEL ${L} · ${titleOf(L).toUpperCase()} · ${P.xp - a}/${b - a} XP TO NEXT</p></div><button class="btn sm" id="swUser">Mirava profile →</button></div>
+    $('s-stats').innerHTML = `<div class="wrap"><div class="sec" style="margin-top:0"><div><div class="k">Profile</div><h2 style="font-size:36px" translate="no">${esc(P.name)}</h2><p class="mono" style="color:var(--gold-t);font-size:12px;margin-top:4px">LEVEL ${L} · ${titleOf(L).toUpperCase()} · ${P.xp - a}/${b - a} XP TO NEXT</p></div><button class="btn sm" id="swUser">Mirava profile →</button></div>
  <div class="tiles">${tile(P.xp, 'Total XP')}${tile(s.ans, 'Answered')}${tile(s.ans ? Math.round(s.cor / s.ans * 100) + '%' : '—', 'Accuracy')}${tile(s.ans ? (s.time / s.ans).toFixed(1) + 's' : '—', 'Avg answer')}${tile(P.best.combo, 'Best streak')}${tile(P.best.lightning, 'Lightning best')}${tile(P.best.survival, 'Survival best')}${tile(P.daily.bestStreak, 'Best daily streak')}</div>
  <div class="grid2" style="margin-top:16px"><div class="card pad"><div class="k">Accuracy by region</div>${BANK.map(r => { const x = s.reg[r.id] || { a: 0, c: 0 }, p = x.a ? x.c / x.a : 0; return `<div class="rbar"><div>${REGION_ICON[r.id]} ${r.label}<span>${x.a ? Math.round(p * 100) + '% · ' + x.c + '/' + x.a : 'not played'}</span></div><div class="bar"><i style="width:${p * 100}%"></i></div></div>` }).join('')}
   <div class="k" style="margin-top:22px">Activity · last 12 weeks</div><div class="heat" style="margin-top:10px">${heat}</div></div>
@@ -537,16 +546,7 @@ export function initArena(root, ctx, hooks = {}) {
  <div class="sec"><h2>Achievements · ${P.ach.length}/${ACH.length}</h2></div><div class="ach-grid">${ACH.map(x => `<div class="card ach ${P.ach.includes(x.id) ? '' : 'off'}"><div class="ai">${x.i}</div><div><b>${x.n}</b><small>${x.d}</small></div></div>`).join('')}</div>
  <div style="margin-top:30px;text-align:right"><button class="btn sm" id="rst" style="border-color:rgba(218,82,37,0.64);color:var(--red)">Reset my arena progress</button></div></div>`
     $('swUser').onclick = () => ctx.navigate('/profile')
-    $('rst').onclick = () => modal('Reset all progress?', `This erases every star, record and achievement in the Quiz Arena for <b>${esc(P.name)}</b>. Your Mirava XP and leaderboard scores are kept.`, [{ t: 'Cancel', gold: true }, { t: 'Erase', fn: () => { P = NEW(playerName()); persist(); renderTop(); go('hub') } }])
-  }
-
-  /* ===================== LEADERBOARD (rival benchmarks) ===================== */
-  function renderBoard() {
-    const el = $('boardRivals'); if (!el) return
-    const rows = RIVALS.map(r => ({ name: r.name, av: r.av, xp: r.xp, stars: null, acc: Math.round(r.acc * 100), bot: true }))
-    rows.push({ name: P.name, xp: P.xp, stars: totalStars(), acc: P.stats.ans ? Math.round(P.stats.cor / P.stats.ans * 100) : 0, me: true })
-    rows.sort((a, b) => b.xp - a.xp)
-    el.innerHTML = `<div class="lb">${rows.map((r, i) => `<div class="card lbr ${r.me ? 'me' : ''} ${r.bot ? 'bot' : ''}"><div class="rk">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</div><div><b>${r.av || ''} ${esc(r.name)}</b>${r.bot ? '<span class="tag">AI RIVAL</span>' : ''}${r.me ? '<span class="tag" style="background:rgba(241,180,60,0.18);color:var(--gold-t)">YOU</span>' : ''}<small>${r.stars != null ? r.stars + ' ★ · ' : ''}${r.acc}% accuracy</small></div><div></div><div class="xp">${r.xp} XP</div></div>`).join('')}</div>`
+    $('rst').onclick = () => modal('Reset all progress?', `This erases every star, record and achievement in the Quiz Arena for <b translate="no">${esc(P.name)}</b>. Your Mirava XP and leaderboard scores are kept.`, [{ t: 'Cancel', gold: true }, { t: 'Erase', fn: () => { P = NEW(playerName()); persist(); renderTop(); go('hub') } }])
   }
 
   /* ===================== KEYBOARD ===================== */
@@ -561,6 +561,9 @@ export function initArena(root, ctx, hooks = {}) {
     if (k === 'escape') quitRun(() => go(RUN ? RUN.cfg.home || 'hub' : 'hub'))
   }
   window.addEventListener('keydown', onKey)
+  // Static screens are rebuilt so code-built strings (tx()) follow the language toggle.
+  const onLang = () => { if (!P || disposed) return; renderTop(); const R = { hub: renderHub, campaign: renderCampaign, rivals: renderRivals, stats: renderStats }; if (R[screen]) R[screen]() }
+  window.addEventListener('mirava:languagechange', onLang)
   const onVis = () => { if (document.hidden && P) persist() }
   document.addEventListener('visibilitychange', onVis)
 
@@ -593,10 +596,11 @@ export function initArena(root, ctx, hooks = {}) {
     cancelAnimationFrame(raf)
     if (onResize) window.removeEventListener('resize', onResize)
     window.removeEventListener('keydown', onKey)
+    window.removeEventListener('mirava:languagechange', onLang)
     document.removeEventListener('visibilitychange', onVis)
     Sound.close()
     root.querySelectorAll('.toast, .confetti, .lvup, .float, .modal').forEach(n => n.remove())
-    const ids = ['s-hub', 's-campaign', 's-region', 's-brief', 's-play', 's-result', 's-rivals', 's-stats', 'boardRivals', 'topR', 'toasts']
+    const ids = ['s-hub', 's-campaign', 's-region', 's-brief', 's-play', 's-result', 's-rivals', 's-stats', 'topR', 'toasts']
     ids.forEach(id => { const n = $(id); if (n) n.innerHTML = '' })
     P = null; RUN = null
   }

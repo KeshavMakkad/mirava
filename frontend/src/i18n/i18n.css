@@ -1,0 +1,49 @@
+/* MIRAVA English / Hindi: readable Devanagari typography (ported from the
+   hackathon's public/mirava-i18n.css) + the React <LanguageToggle/>. Global,
+   not page-scoped: imported once from main.tsx. */
+@font-face{font-family:'Mirava Devanagari';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/NotoSansDevanagari-400.ttf') format('truetype');unicode-range:U+0900-097F,U+1CD0-1CFF,U+200C-200D,U+20B9,U+25CC,U+A830-A839,U+A8E0-A8FF}
+@font-face{font-family:'Mirava Devanagari';font-style:normal;font-weight:500;font-display:swap;src:url('/fonts/NotoSansDevanagari-500.ttf') format('truetype');unicode-range:U+0900-097F,U+1CD0-1CFF,U+200C-200D,U+20B9,U+25CC,U+A830-A839,U+A8E0-A8FF}
+@font-face{font-family:'Mirava Devanagari';font-style:normal;font-weight:600;font-display:swap;src:url('/fonts/NotoSansDevanagari-600.ttf') format('truetype');unicode-range:U+0900-097F,U+1CD0-1CFF,U+200C-200D,U+20B9,U+25CC,U+A830-A839,U+A8E0-A8FF}
+@font-face{font-family:'Mirava Devanagari';font-style:normal;font-weight:700;font-display:swap;src:url('/fonts/NotoSansDevanagari-700.ttf') format('truetype');unicode-range:U+0900-097F,U+1CD0-1CFF,U+200C-200D,U+20B9,U+25CC,U+A830-A839,U+A8E0-A8FF}
+
+html[lang="hi"] body,html[lang="hi"] button,html[lang="hi"] input,html[lang="hi"] select,html[lang="hi"] textarea{font-family:'Mirava Devanagari',Manrope,Arial,sans-serif}
+html[lang="hi"] :where(h1,h2,h3,h4,h5,h6,p,li,dt,dd,label,button,a,small,figcaption,blockquote,th,td,option){font-family:'Mirava Devanagari',Manrope,Arial,sans-serif;letter-spacing:normal}
+html[lang="hi"] :where(h1,h2,h3){line-height:1.38}
+html[lang="hi"] :where(p,li,dd,figcaption,blockquote){line-height:1.85}
+html[lang="hi"] :where(button,.btn,.pill,.tab,.eyebrow,.kicker,.k,.tag,.nav a){line-height:1.6;letter-spacing:normal}
+html[lang="hi"] :where(.brand,.logo){font-family:inherit}
+html[lang="hi"] :where(.hero h1,.intro h1){letter-spacing:-.015em}
+html[lang="hi"] :where(.hud-quest,.hq-d,.hq-t){line-height:1.55}
+html[lang="hi"] :where(.hero-body,.hero-text,.intro>div){min-width:0}
+html[lang="hi"] .mirava-chapter-nav a{letter-spacing:0}
+/* The runtime marks every element whose text it translated; page CSS often
+   sets `font:` with higher specificity, so this rule must win. */
+html[lang="hi"] [data-mirava-translated="true"],html[lang="hi"] .cms-modal-panel :where(h2,p,button,label),html[lang="hi"] .cms-quiz :where(h2,p,button),html[lang="hi"] #publishedNews :where(h3,p){font-family:'Mirava Devanagari',Manrope,Arial,sans-serif!important;letter-spacing:normal!important}
+html[lang="hi"] .mir-card::after{content:'खोजें →';font-family:'Mirava Devanagari',Arial,sans-serif;letter-spacing:normal}
+html[lang="hi"] .intro-image:after{content:'जल स्थापत्य · राजस्थान';font-family:'Mirava Devanagari',Arial,sans-serif;letter-spacing:normal}
+html[lang="hi"] [data-calendar-weekday]{font-family:'Mirava Devanagari',Arial,sans-serif;font-size:10px;letter-spacing:normal}
+@media(max-width:600px){html[lang="hi"] :where(.hero h1,.hero-body h1,.intro h1){font-size:clamp(2.6rem,10.5vw,5rem)}html[lang="hi"] .top nav{gap:10px}html[lang="hi"] :where(.hud-quest){max-width:46vw}html[lang="hi"] :where(.hud-quest .hq-t){font-size:12px}}
+
+.mirava-language-fallback{display:inline-block;margin:7px 0;padding:4px 9px;border-radius:7px;background:#fcf0d9;color:#5c3b14;font:500 11px/1.5 'Mirava Devanagari',Manrope,Arial,sans-serif}
+.mirava-sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+
+/* Runtime status messages ("Your language preference is saved." …). */
+.mirava-i18n-status{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:max(72px,calc(env(safe-area-inset-bottom) + 72px));z-index:2147483646;width:max-content;max-width:min(330px,calc(100vw - 32px));padding:12px 16px;border:1px solid #d4ae78;border-radius:13px;background:#fff9ee;color:#422030;box-shadow:0 6px 24px #24151a20;font:500 12px/1.7 'Mirava Devanagari',Manrope,Arial,sans-serif;white-space:normal;pointer-events:none}
+.mirava-i18n-status:empty{display:none}
+
+/* ---- <LanguageToggle/>: EN | हिंदी ---- */
+.mv-lang{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid #d4ae78;border-radius:100px;background:rgba(49,20,32,.92);color:#fff6e7;box-shadow:0 4px 16px #24151a1f;flex:none;isolation:isolate;font:700 11px/1 Manrope,'Mirava Devanagari',Arial,sans-serif}
+.mv-lang button{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-height:28px;min-width:34px;padding:4px 9px;border-radius:99px;cursor:pointer;font:700 11px/1 Manrope,'Mirava Devanagari',Arial,sans-serif;letter-spacing:.04em;color:inherit;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .18s,color .18s}
+.mv-lang button.mv-lang-hi{font-family:'Mirava Devanagari',Arial,sans-serif;font-size:12px;letter-spacing:0;padding-top:6px}
+.mv-lang button[aria-pressed="true"]{background:#f3cf91;color:#321620}
+.mv-lang button:hover{background:#ffffff20}
+.mv-lang button[aria-pressed="true"]:hover{background:#ffe0a9}
+.mv-lang button:focus-visible{outline:2px solid #fff1ca;outline-offset:2px}
+.mv-lang[aria-busy="true"] button{cursor:progress;opacity:.65}
+.mv-lang-sep{width:1px;height:14px;background:#ffffff40}
+
+/* Floating dock: shown only on pages with no header toggle (standalone apps). */
+.mv-lang-dock{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:2147483640}
+body:has(.mv-lang:not(.mv-lang-floating)) .mv-lang-dock{display:none}
+@media print{.mv-lang-dock,.mirava-i18n-status{display:none!important}}
+@media(prefers-reduced-motion:reduce){.mv-lang *{transition:none!important}}

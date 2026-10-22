@@ -8,9 +8,9 @@ import './rasoi.page.css'
 
 const NAV: [string, string][] = [
   ['#/', 'Home'],
-  ['#/cookbook', 'Recipe book'],
+  ['#/cookbook', 'Explore recipes'],
   ['#/record', 'Preserve a recipe'],
-  ['#/vault', 'My vault'],
+  ['#/vault', 'Public vault'],
 ]
 
 function currentRoute() {
@@ -21,7 +21,10 @@ function currentRoute() {
   }
 }
 
-/** Rasoi Rescue — Recipes That Remember (port of legacy rasoi-rescue.html). */
+/**
+ * Rasoi Rescue — Recipes That Remember (port of rasoi-rescue.html). Family recipes
+ * live in the server vault (api.rasoi), with a device copy for offline use.
+ */
 export default function RasoiRescue() {
   const { me, isGuest } = useAuth()
   const navigate = useNavigate()
@@ -42,7 +45,11 @@ export default function RasoiRescue() {
     href === '#' + route || (href === '#/cookbook' && route.startsWith('/cookbook/'))
 
   return (
-    <PageScope name="rasoi-rescue" title="Rasoi Rescue — Recipes That Remember">
+    <PageScope
+      name="rasoi-rescue"
+      title="Rasoi Rescue — Recipes That Remember"
+      className="mirava-quiz-skin mirava-quiz-rasoi"
+    >
       <div ref={ref}>
         <header className="top">
           <div className="wrap top-inner">
@@ -74,7 +81,7 @@ export default function RasoiRescue() {
             </a>
             <p>Recipes that remember. A Mirava initiative.</p>
             <p>
-              Personal recordings are stored in your browser. Library samples are illustrative, not verified culinary
+              Personal recordings are saved privately to your Mirava account. Library samples are illustrative, not verified culinary
               instructions.
             </p>
           </div>

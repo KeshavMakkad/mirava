@@ -1,0 +1,249 @@
+/* Ported from the new explore.html <style id="mirava-spatial-styles"> (dark observatory hero, globe, depth). */
+/* MIRAVA spatial edition. Scoped additions preserve the existing app hooks. */
+html { overflow-x: clip; scrollbar-color: #8e713f #141116; scrollbar-width: thin; }
+body::-webkit-scrollbar { width: 8px; }
+body::-webkit-scrollbar-track { background: #141116; }
+body::-webkit-scrollbar-thumb { background: #8e713f; border: 2px solid #141116; border-radius: 8px; }
+body { --spatial-ivory: #f2eee4; --spatial-gold: #e8bb70; }
+.noise { opacity: .028; }
+#miravaReadProgress { position: fixed; z-index: 100001; top: 0; left: 0; width: 100%; height: 2px; background: linear-gradient(90deg,#8f632f,#f5d58d); transform: scaleX(var(--read-progress,0)); transform-origin: left; pointer-events: none; }
+.mirava-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+:where(a,button,input,canvas):focus-visible { outline: 2px solid #e8bb70; outline-offset: 5px; }
+.mirava-skip { position: fixed; z-index: 100002; left: 20px; top: -90px; padding: 13px 20px; background: #e8bb70; color: #171216; border-radius: 8px; font-weight: 700; }
+.mirava-skip:focus { top: 16px; }
+
+/* A dark observatory around the original MIRAVA headline and navigation. */
+#top.hero { background: #090e11; color: var(--spatial-ivory); height: 100svh; min-height: 790px; max-height: 1160px; display: flex; align-items: center; overflow: hidden; }
+#top.hero::before { inset: 0; animation: none; transform: none; background: radial-gradient(ellipse at 76% 43%,rgba(47,76,81,.23),transparent 49%),radial-gradient(ellipse at 21% 61%,rgba(117,73,29,.08),transparent 44%),linear-gradient(180deg,#080c0f,#0c1215 75%,#101317); }
+#top.hero::after { inset: auto 0 0; width: auto; height: 170px; border: 0; border-radius: 0; box-shadow: none; background: linear-gradient(transparent,#101317); animation: none; pointer-events: none; }
+.mirava-hero-grid { position: absolute; inset: 0; opacity: .42; background-image: linear-gradient(rgba(184,201,194,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(184,201,194,.04) 1px,transparent 1px); background-size: 96px 96px; mask-image: linear-gradient(90deg,transparent,black 65%); pointer-events: none; }
+.mirava-hero-grid::after { content: 'MIRAVA'; position: absolute; bottom: 73px; left: 4.2vw; font: 600 20vw/.8 'Manrope',sans-serif; letter-spacing: -.08em; color: rgba(214,197,163,.026); }
+#top .top { top: 0; height: 94px; padding: 0 4.6vw; gap: 24px; z-index: 10; border-bottom: 1px solid rgba(208,200,177,.12); }
+#top .brand { font-size: 35px; letter-spacing: -.075em; flex-shrink: 0; }
+#top .brand i { color: var(--spatial-gold); }
+#top .top nav { gap: clamp(12px,1.4vw,24px); justify-content: center; font-size: 9px; letter-spacing: .08em; }
+#top .top nav a { opacity: .73; padding: 15px 0; position: relative; }
+#top .top nav a::after { content: ''; position: absolute; height: 1px; background: var(--spatial-gold); left: 0; right: 0; bottom: 6px; transform: scaleX(0); transform-origin: left; transition: transform .25s; }
+#top .top nav a:hover::after,#top .top nav a:focus-visible::after { transform: scaleX(1); }
+#top .top nav a:hover { color: var(--spatial-ivory); opacity: 1; }
+#top .member { background: rgba(255,255,255,.025); border-color: rgba(217,199,162,.35); padding: 11px 17px; font-size: 10px; max-width: 164px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#top .profile-popover { z-index: 12; background: #161b1c; border-color: rgba(232,187,112,.23); }
+.mirava-menu-toggle { display: none; align-items: center; justify-content: center; width: 40px; height: 40px; border: 1px solid rgba(217,199,162,.35); background: transparent; border-radius: 50%; color: var(--spatial-ivory); cursor: pointer; }
+.mirava-menu-toggle svg { width: 18px; height: 18px; }
+#top .hero-body { width: min(670px,48.5vw); max-width: none; margin: -28px 0 0 5.5vw; padding: 0; z-index: 3; translate: 0 calc(var(--hero-travel,0) * -28px); pointer-events: none; }
+#top .hero-body .eyebrow { color: #bda783; font-size: 9px; letter-spacing: .19em; margin-bottom: 28px; }
+#top .hero-body .eyebrow::before { width: 24px; }
+#top .hero h1,#top h1 { font: 500 clamp(66px,7.6vw,118px)/.98 'Playfair Display',Georgia,serif; letter-spacing: -.065em; margin: 0 0 30px; }
+#top h1 em { color: var(--spatial-gold); font-weight: 500; }
+#top .hero-body > p { max-width: 410px; color: #a9b0ae; font-size: 13px; line-height: 1.95; letter-spacing: .01em; }
+#top .hero-actions { margin-top: 31px; gap: 24px; align-items: center; flex-direction: row; flex-wrap: wrap; pointer-events: auto; }
+#top .hero-actions .pill { background: #e4bd7b; color: #171a19; padding: 11px 11px 11px 23px; font-size: 11px; gap: 22px; box-shadow: 0 6px 30px rgba(190,137,58,.13); }
+#top .hero-actions .pill b { background: #1b2223; font-size: 17px; width: 33px; height: 33px; }
+#top .hero-actions .pill:hover { box-shadow: 0 8px 34px rgba(220,169,84,.28); transform: translateY(-3px); }
+.mirava-hero-link { color: #c6ccc5; font: 500 10px 'DM Mono',monospace; letter-spacing: .01em; padding: 14px 0; border-bottom: 1px solid rgba(231,197,140,.28); }
+.mirava-hero-link span { margin-left: 12px; color: var(--spatial-gold); }
+.mirava-hero-link:hover { color: #fff; border-color: var(--spatial-gold); }
+.mirava-hero-caption { display: flex; align-items: center; gap: 9px; margin-top: 37px; color: #718481; font: 400 8px 'DM Mono',monospace; letter-spacing: .12em; text-transform: uppercase; }
+.mirava-hero-caption i { display: block; width: 5px; height: 5px; border-radius: 50%; background: #93b49a; box-shadow: 0 0 9px rgba(147,180,154,.4); }
+
+/* The WebGL globe has all geometry and texture embedded in this file. */
+.mirava-orbit { position: absolute; top: 48%; right: -3.5%; width: 61%; height: min(780px,91%); transform: translateY(-50%); z-index: 2; perspective: 1200px; }
+#miravaGlobe { display: block; position: absolute; inset: 0; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; outline-offset: -26px; border-radius: 50%; }
+#miravaGlobe:active { cursor: grabbing; }
+.mirava-orbit[data-state='static'] #miravaGlobe { visibility: hidden; }
+.orbit-fallback { position: absolute; inset: 0; pointer-events: none; transition: opacity .5s; }
+.mirava-orbit[data-state='ready'] .orbit-fallback { opacity: 0; }
+.orbit-fallback-ball { position: absolute; width: 58%; aspect-ratio: 1; left: 21%; top: 50%; transform: translateY(-50%); border-radius: 50%; background: radial-gradient(circle at 29% 25%,rgba(255,241,199,.15),transparent 47%),radial-gradient(circle at 32% 35%,#768786 0,#35474b 25%,#18252c 60%,#080e14 80%); box-shadow: inset 15px 4px 35px rgba(201,207,168,.24),inset -30px -14px 60px #070b10,0 0 44px rgba(89,147,154,.14); overflow: hidden; }
+.orbit-fallback-ball::before { content: ''; position: absolute; inset: -7% -25%; border-radius: 50%; background-image: url('/images/mirava-globe-map.png'); background-size: 220% 100%; background-position: 68% center; mix-blend-mode: screen; opacity: .48; filter: sepia(1) saturate(.75); }
+.orbit-fallback-ball::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 23% 28%,transparent 20%,rgba(2,8,13,.22) 47%,#080d13 82%); border-radius: 50%; box-shadow: inset 2px 0 4px rgba(174,204,207,.7); }
+.orbit-fallback-ring { position: absolute; width: 91%; height: 36%; left: 4.5%; top: 32%; border: 1px solid rgba(220,182,120,.31); border-radius: 50%; transform: rotate(-25deg); }
+.orbit-fallback-ring + .orbit-fallback-ring { transform: rotate(49deg); width: 76%; left: 12%; height: 52%; top: 24%; border-color: rgba(214,206,180,.2); }
+.orbit-topline { position: absolute; left: 27%; right: 15%; top: 13%; display: flex; justify-content: space-between; color: #68817e; font: 400 8px 'DM Mono',monospace; letter-spacing: .15em; pointer-events: none; }
+.orbit-topline span:last-child { color: #b0a184; }
+.orbit-bottomline { position: absolute; bottom: 13%; left: 34%; font: 400 8px 'DM Mono',monospace; letter-spacing: .16em; color: #788885; pointer-events: none; }
+.orbit-pin { position: absolute; left: var(--pin-x,55%); top: var(--pin-y,46%); transform: translate(19px,-15px); opacity: var(--pin-visible,0); color: #eacb90; font: 500 8px 'DM Mono',monospace; letter-spacing: .15em; pointer-events: none; text-shadow: 0 1px 9px #000; white-space: nowrap; }
+.orbit-pin small { display: block; color: #a3b0a5; font-size: 6px; letter-spacing: .13em; margin-top: 4px; }
+.orbit-card { position: absolute; display: block; width: 174px; padding: 17px 18px; color: #e1ded2; border: 1px solid rgba(223,190,132,.25); background: linear-gradient(135deg,rgba(29,40,43,.94),rgba(16,24,28,.87)); box-shadow: 0 22px 42px rgba(0,0,0,.36); backdrop-filter: blur(14px); border-radius: 5px; transform-style: preserve-3d; transition: border-color .25s,box-shadow .25s; }
+.orbit-card:hover { border-color: #ba965b; box-shadow: 0 25px 50px rgba(0,0,0,.46); }
+.orbit-card small { display: flex; align-items: center; justify-content: space-between; font: 400 7px 'DM Mono',monospace; color: #a4a896; letter-spacing: .13em; }
+.orbit-card strong { display: block; font: 500 24px/1.1 'Playfair Display',Georgia,serif; letter-spacing: -.04em; margin: 11px 0 5px; color: #e8d2aa; }
+.orbit-card > span { display: block; font: 400 8px/1.6 'Manrope',sans-serif; color: #939e99; }
+.orbit-card-one { top: 18%; right: 11%; transform: rotateY(-16deg) rotateZ(4deg); animation: miravaCardFloatA 11s ease-in-out infinite; }
+.orbit-card-two { left: 14%; bottom: 16%; transform: rotateY(15deg) rotateZ(-5deg); animation: miravaCardFloatB 13s ease-in-out infinite; }
+.orbit-card-rule { display: flex; gap: 4px; margin-top: 15px; align-items: end; height: 18px; }
+.orbit-card-rule i { display: block; width: 2px; height: 9px; background: #cba064; opacity: .4; }
+.orbit-card-rule i:nth-child(3n) { height: 18px; opacity: .9; }
+.orbit-card-rule i:nth-child(2n) { height: 13px; }
+.orbit-card svg { width: 35px; height: 35px; margin-top: 13px; color: #cba064; }
+@keyframes miravaCardFloatA { 50% { transform: translate3d(0,-12px,14px) rotateY(-10deg) rotateZ(2deg); } }
+@keyframes miravaCardFloatB { 50% { transform: translate3d(0,10px,10px) rotateY(10deg) rotateZ(-3deg); } }
+
+.mirava-hero-footer { position: absolute; bottom: 30px; left: 5.5%; right: 5.5%; z-index: 4; border-top: 1px solid rgba(208,200,177,.17); padding-top: 24px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 28px; }
+.mirava-scroll-cue { display: flex; align-items: center; gap: 14px; font: 400 8px 'DM Mono',monospace; letter-spacing: .12em; color: #89918b; }
+.mirava-scroll-cue b { display: grid; place-items: center; width: 33px; height: 33px; border: 1px solid rgba(213,190,151,.28); border-radius: 50%; color: #d3b686; font: 400 15px Manrope,sans-serif; }
+.mirava-chapter-nav { display: flex; gap: 23px; }
+.mirava-chapter-nav a { font: 500 8px 'DM Mono',monospace; letter-spacing: .06em; color: #a2a69d; padding: 11px 0; }
+.mirava-chapter-nav a b { font-size: 7px; color: #c6a576; margin-right: 7px; font-weight: 400; }
+.mirava-chapter-nav a:hover { color: #f3e8d3; }
+.mirava-orbit-tools { justify-self: end; display: flex; align-items: center; gap: 9px; margin-right: 58px; }
+.mirava-orbit-tools button { background: rgba(255,255,255,.025); color: #b7beb5; border: 1px solid rgba(201,182,147,.2); border-radius: 50px; padding: 10px 13px; font: 400 8px 'DM Mono',monospace; cursor: pointer; white-space: nowrap; }
+.mirava-orbit-tools button:hover { color: #f5e5c8; border-color: rgba(222,192,139,.55); }
+.mirava-orbit-tools button:disabled { opacity: .4; cursor: default; }
+#miravaMotionToggle::before { content: 'Ⅱ'; margin-right: 7px; color: #ddbc84; }
+#miravaMotionToggle[aria-pressed='true']::before { content: '▷'; }
+
+/* Hide only the unwanted native timeline bar. Touch scrolling stays native. */
+#timeRail.time-timeline-track { overflow-x: auto; overflow-y: hidden; scrollbar-width: none !important; -ms-overflow-style: none; max-width: 100%; overscroll-behavior-x: contain; scroll-padding-inline: 18px; }
+#timeRail.time-timeline-track::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; background: transparent; }
+.time-node { scroll-margin-inline: 16px; }
+.time-node:focus-visible { outline-offset: -2px; border-radius: 6px; }
+.time-slider:focus-visible { outline: 2px solid #f4bb40; outline-offset: 9px; }
+.footer-nav:disabled { opacity: .28; cursor: default; }
+.mirava-timeline-guide { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin: 0 4px 15px; color: #ac9b82; font: 400 8px 'DM Mono',monospace; letter-spacing: .1em; }
+.mirava-timeline-guide span:last-child { color: #84786b; }
+
+/* Perspective composes with, rather than overwrites, the existing reveal transforms. */
+.time-header,.time-stage,.civil-experience,.stage-cards,.museum-gallery,.mir-pricing-grid { perspective: 1400px; }
+.mirava-depth { rotate: var(--mirava-axis,1 0 0) var(--mirava-angle,0deg); transition: rotate .25s ease,box-shadow .35s,border-color .35s,transform .45s,opacity .5s; backface-visibility: hidden; }
+.mirava-depth.mirava-depth-active { will-change: rotate; }
+.time-hud.mirava-depth-active,.civil-hero.mirava-depth-active { box-shadow: 0 35px 80px rgba(0,0,0,.3),inset 0 1px 0 rgba(236,200,133,.23); }
+#time { background: radial-gradient(ellipse at 8% 10%,rgba(126,88,45,.11),transparent 53%),#0e1016; }
+#time .time-aurora { opacity: .44; filter: blur(44px); }
+#time .time-hud { background: linear-gradient(135deg,rgba(173,183,179,.07),rgba(41,43,43,.07)); border-color: rgba(209,175,116,.24); border-radius: 12px; }
+#time .stage-visual { background: radial-gradient(ellipse at 44% 39%,rgba(173,135,67,.12),transparent 55%),linear-gradient(135deg,#161b20,#0c1016); border-radius: 14px; }
+#time .stage-orb,#time .stage-ring,#time .stage-floaty { display: none; }
+.mirava-armillary { position: absolute; width: 244px; height: 244px; top: 43%; left: 50%; transform-style: preserve-3d; transform: translate(-50%,-50%) rotateX(-19deg) rotateY(25deg); animation: miravaArmillaryTurn 32s linear infinite; pointer-events: none; }
+.mirava-armillary::after { content: ''; position: absolute; inset: 88px; background: radial-gradient(circle at 28% 24%,#e6d4a8,#a9803c 38%,#3a2f22 78%); border-radius: 50%; box-shadow: 0 0 35px rgba(214,178,105,.13); }
+.armillary-ring { position: absolute; inset: 0; border: 3px solid #9b7a40; border-top-color: #edd7a0; border-left-color: #c1a064; border-radius: 50%; box-shadow: 0 0 0 1px rgba(235,210,157,.25),inset 0 0 0 1px rgba(242,216,165,.4); transform-style: preserve-3d; }
+.armillary-ring:nth-child(1) { transform: rotateX(74deg); }
+.armillary-ring:nth-child(2) { transform: rotateY(65deg); }
+.armillary-ring:nth-child(3) { transform: rotateY(-42deg) rotateX(22deg); inset: 14px; border-width: 1px; border-style: dashed; }
+.armillary-ring:nth-child(4) { inset: -23px; transform: rotateX(74deg) rotateY(-14deg); border-width: 1px; border-color: rgba(204,167,91,.5); }
+.armillary-ring i { position: absolute; width: 8px; height: 8px; background: #e7ca8a; border-radius: 50%; top: 50%; left: -5px; box-shadow: 0 0 15px rgba(246,203,115,.5); }
+.mirava-armillary-label { position: absolute; left: 26px; top: 28px; font: 400 8px 'DM Mono',monospace; color: #9e8c6c; letter-spacing: .2em; }
+@keyframes miravaArmillaryTurn { from { transform: translate(-50%,-50%) rotateX(-19deg) rotateY(25deg); } to { transform: translate(-50%,-50%) rotateX(-19deg) rotateY(385deg); } }
+#time .stage-glow { opacity: .35; }
+#time .era-card { background: linear-gradient(125deg,rgba(167,178,179,.06),rgba(140,113,67,.025)); border-radius: 11px; }
+#time .era-card::before { width: 2px; background: linear-gradient(#d5b278,#634c2d); }
+#time .stage-number strong { color: #dcb578; text-shadow: none; }
+#time .stage-caption { border-color: rgba(222,192,139,.2); }
+#civilizations .civil-hero { box-shadow: 0 26px 55px rgba(65,34,25,.2); }
+#art .museum-piece { box-shadow: 0 18px 40px rgba(0,0,0,.2); }
+.section { scroll-margin-top: 24px; }
+
+/* Finish short UI transitions and stop decorative loops when motion is paused. */
+html.mirava-motion-paused { scroll-behavior: auto !important; }
+html.mirava-motion-paused *,html.mirava-motion-paused *::before,html.mirava-motion-paused *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+html.mirava-motion-paused .mirava-depth { rotate: none !important; }
+html.mirava-motion-paused #top .hero-body { translate: none; }
+#top.mirava-scene-offscreen .orbit-card,#time.mirava-scene-offscreen .mirava-armillary { animation-play-state: paused; }
+@media (prefers-reduced-motion:reduce) {
+  html:not(.mirava-motion-ready) { scroll-behavior: auto !important; }
+  html:not(.mirava-motion-ready) *,html:not(.mirava-motion-ready) *::before,html:not(.mirava-motion-ready) *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
+@media (min-width:1700px) {
+  #top .hero-body { width: 47%; max-width: 800px; }
+  #top h1 { font-size: 134px; }
+  #top .hero-body > p { font-size: 15px; max-width: 440px; }
+  .mirava-orbit { width: 60%; right: -2%; height: 95%; }
+  .orbit-card { width: 202px; padding: 21px; }
+}
+@media (max-width:1199px) {
+  #top .top { gap: 14px; }
+  #top .top .account-area { margin-left: auto; }
+  .mirava-menu-toggle { display: inline-flex; }
+  #top .top nav { display: none; position: absolute; left: 4.6vw; right: 4.6vw; top: 80px; padding: 20px; grid-template-columns: 1fr 1fr; gap: 0 20px; background: #121b1f; border: 1px solid rgba(218,192,140,.24); border-radius: 12px; box-shadow: 0 24px 50px rgba(0,0,0,.4); }
+  #top .top nav.mirava-nav-open { display: grid; }
+  #top .top nav a { padding: 15px 10px; font-size: 10px; border-bottom: 1px solid rgba(218,192,140,.12); }
+  #top .top nav a::after { display: none; }
+  #top .hero-body { width: 50vw; margin-left: 5vw; }
+  #top h1 { font-size: clamp(66px,8vw,96px); }
+  .mirava-orbit { width: 64%; right: -8%; }
+  .orbit-card { width: 149px; padding: 14px; }
+  .orbit-card-one { right: 14%; top: 21%; }
+  .orbit-card-two { left: 18%; bottom: 20%; }
+  .orbit-card strong { font-size: 22px; }
+  .mirava-chapter-nav { gap: 15px; }
+  .mirava-hero-footer { gap: 20px; }
+  .mirava-scroll-cue { font-size: 7px; gap: 9px; }
+}
+@media (max-width:800px) {
+  #top.hero { height: auto; min-height: 1060px; max-height: none; display: block; }
+  #top .top { height: 76px; padding: 0 6vw; }
+  #top .brand { font-size: 31px; }
+  #top .hero-body { width: 86%; max-width: 600px; padding-top: 137px; margin: 0 0 0 7%; }
+  #top h1 { font-size: clamp(60px,10.8vw,84px); line-height: .99; margin-bottom: 20px; }
+  #top .hero-body .eyebrow { margin-bottom: 22px; font-size: 8px; }
+  #top .hero-body > p { font-size: 12px; line-height: 1.8; max-width: 395px; }
+  #top .hero-actions { margin-top: 24px; gap: 20px; }
+  #top .hero-actions .pill { padding: 9px 10px 9px 19px; gap: 18px; font-size: 10px; }
+  .mirava-hero-caption { display: none; }
+  .mirava-orbit { top: 445px; left: 50%; right: auto; width: min(740px,109%); height: 505px; transform: translateX(-50%); }
+  .orbit-topline { top: 9%; left: 23%; right: 16%; }
+  .orbit-bottomline { bottom: 6%; left: 37%; font-size: 7px; }
+  .orbit-card-one { top: 15%; right: 10%; }
+  .orbit-card-two { bottom: 12%; left: 11%; }
+  .orbit-card { width: 132px; padding: 13px; }
+  .orbit-card small { font-size: 6px; }
+  .orbit-card strong { font-size: 21px; }
+  .orbit-card > span { font-size: 7px; }
+  .orbit-card-rule { margin-top: 9px; height: 14px; }
+  .orbit-card-rule i:nth-child(3n) { height: 14px; }
+  .orbit-card svg { width: 27px; height: 27px; margin-top: 8px; }
+  .mirava-hero-footer { bottom: 23px; left: 7%; right: 7%; grid-template-columns: 1fr; padding-top: 17px; gap: 12px; }
+  .mirava-chapter-nav { display: none; }
+  .mirava-scroll-cue span { max-width: none; line-height: 1.6; }
+  .mirava-orbit-tools { justify-self: start; margin-right: 0; }
+  .mirava-orbit-tools button { font-size: 7px; padding: 9px 10px; }
+  .mirava-hero-grid::after { bottom: 120px; }
+  .mirava-timeline-guide { font-size: 7px; line-height: 1.6; }
+  .mirava-timeline-guide span:last-child { max-width: 150px; text-align: right; }
+  .time-header,.time-stage,.civil-experience,.stage-cards,.museum-gallery { perspective: none; }
+  .mirava-depth { rotate: none; }
+}
+@media (max-width:480px) {
+  #top.hero { min-height: 965px; }
+  #top .hero-body { padding-top: 127px; width: 88%; margin-left: 6%; }
+  #top h1 { font-size: clamp(54px,13.1vw,64px); letter-spacing: -.065em; }
+  #top .hero-body .eyebrow { letter-spacing: .13em; font-size: 7px; }
+  #top .hero-body > p { max-width: 330px; font-size: 11px; }
+  #top .hero-actions { gap: 19px; }
+  .mirava-hero-link { font-size: 9px; }
+  .mirava-orbit { top: 419px; height: 423px; width: 119%; }
+  .orbit-topline { top: 4%; font-size: 6px; left: 22%; right: 20%; }
+  .orbit-bottomline { bottom: 5%; left: 35%; font-size: 6px; }
+  .orbit-card { width: 115px; padding: 11px 12px; }
+  .orbit-card strong { font-size: 20px; margin-top: 8px; }
+  .orbit-card-one { top: 13%; right: 13%; }
+  .orbit-card-two { bottom: 10%; left: 13%; }
+  .orbit-card > span { max-width: 100px; }
+  .orbit-card small { font-size: 5.8px; letter-spacing: .06em; }
+  .orbit-pin { font-size: 7px; transform: translate(12px,-12px); }
+  .orbit-pin small { font-size: 5px; }
+  .mirava-hero-footer { left: 6%; right: 6%; bottom: 24px; padding-top: 19px; }
+  .mirava-scroll-cue b { width: 29px; height: 29px; }
+  #top .member { max-width: 113px; font-size: 9px; padding: 10px 13px; }
+  .mirava-menu-toggle { width: 35px; height: 35px; }
+  #top .top { gap: 10px; }
+  .mirava-orbit-tools { gap: 6px; }
+  .mirava-orbit-tools button { padding: 9px; font-size: 6.8px; }
+  .mirava-armillary { width: 207px; height: 207px; }
+  .mirava-armillary::after { inset: 75px; }
+  .mirava-armillary-label { top: 24px; left: 23px; font-size: 7px; }
+}
+@media (max-width:360px) {
+  #top h1 { font-size: 49px; }
+  #top.hero { min-height: 980px; }
+  .mirava-orbit { top: 453px; }
+  .mirava-hero-link { font-size: 8px; }
+  #top .hero-actions { gap: 12px; }
+  .mirava-scroll-cue span { display: none; }
+}
+@media print {
+  #miravaReadProgress,.mirava-orbit,.mirava-orbit-tools,.mirava-menu-toggle { display: none; }
+  .section,.story-card,.fest,.artwork,.footer-grid>div { opacity: 1 !important; transform: none !important; }
+}
+
+
+/* New explore.html hides the legacy hard-coded newsroom; only admin-published stories show. */
+#news .newsroom-layout{display:none!important}

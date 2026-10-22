@@ -153,9 +153,17 @@ export function TimeMachine({ active, speak }: Props) {
               <div className="dot"></div>
               <div className="era">{s.era}</div>
               <h4>{s.t}</h4>
-              <div className="big">{s.big}</div>
-              {s.alt && <div className="alt">{s.alt}</div>}
-              <div className="ro">{s.ro}</div>
+              <div className="big" translate="no">
+                {s.big}
+              </div>
+              {s.alt && (
+                <div className="alt" translate="no">
+                  {s.alt}
+                </div>
+              )}
+              <div className="ro" translate="no">
+                {s.ro}
+              </div>
               <div className="rule">
                 {s.k === 'sa' ? (
                   s.rule.quote ? `“${s.rule.quote}”` : 'Your word'
@@ -164,7 +172,7 @@ export function TimeMachine({ active, speak }: Props) {
                     <b>{s.rule.title}</b>{' '}
                     {s.rule.predicted !== undefined ? (
                       <>
-                        Sound laws predict <i>{s.rule.predicted}</i>{' '}
+                        Sound laws predict <i translate="no">{s.rule.predicted}</i>{' '}
                         <span className={s.rule.same ? 'ok' : 'no'}>
                           {s.rule.same ? '✓ match' : '✗ history took another path'}
                         </span>
@@ -199,9 +207,9 @@ export function TimeMachine({ active, speak }: Props) {
                     {ch[6].map((c) => (
                       <div key={c[0]}>
                         <small>{c[0]}</small>
-                        <b>{c[1]}</b>
+                        <b translate="no">{c[1]}</b>
                         <small>
-                          <i>{c[2]}</i>
+                          <i translate="no">{c[2]}</i>
                         </small>
                       </div>
                     ))}

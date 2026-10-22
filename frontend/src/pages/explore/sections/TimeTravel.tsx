@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ERA_ORDER, ERAS } from '../data/time'
-import { isTypingTarget, pageHasOpenOverlay, useFadeSwap } from '../util'
+import { useFadeSwap } from '../util'
+import { TimeCompare } from './TimeCompare'
 
 const NODES: { year: string; region: string; theme: string; label: string; era: string; name: string }[] = [
   { year: '-500', region: 'Gangetic Plain', theme: 'Philosophy & Cities', label: '500', era: 'BCE', name: 'Questions' },
+  // 250 BCE (was a mislabelled "250 CE" node whose data-year did not match its era key).
+  { year: '-250', region: 'Magadha', theme: 'Empire & Edicts', label: '250', era: 'BCE', name: 'Mauryan Age' },
   { year: '120', region: 'Indian Ocean', theme: 'Trade & Ports', label: '120', era: 'CE', name: 'Ocean Routes' },
-  { year: '250', region: 'Magadha', theme: 'Empire & Edicts', label: '250', era: 'CE', name: 'Mauryan Echo' },
   { year: '450', region: 'North India', theme: 'Science & Court', label: '450', era: 'CE', name: 'Gupta World' },
   { year: '800', region: 'Deccan & South', theme: 'Temples & Cities', label: '800', era: 'CE', name: 'Temple Cities' },
   { year: '1200', region: 'Both Coasts', theme: 'Trade & Temples', label: '1200', era: 'CE', name: 'Ocean Networks' },
@@ -60,18 +62,34 @@ export function TimeTravel() {
     }
   }, [positionGlow])
 
-  // Arrow keys move through eras while the section is on screen.
+  // Keep the selected era visible by scrolling just the rail, never the page.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
-      if (isTypingTarget(e.target) || pageHasOpenOverlay(sectionRef.current)) return
-      const rect = sectionRef.current?.getBoundingClientRect()
-      if (!rect || rect.bottom < 0 || rect.top > window.innerHeight) return
-      goTo(indexRef.current + (e.key === 'ArrowRight' ? 1 : -1))
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [goTo])
+    const rail = trackRef.current
+    const node = nodeRefs.current[index]
+    if (!rail || !node) return
+    const left = node.offsetLeft - 14
+    const right = node.offsetLeft + node.offsetWidth + 14
+    let target = rail.scrollLeft
+    if (left < target) target = left
+    else if (right > target + rail.clientWidth) target = right - rail.clientWidth
+    if (target === rail.scrollLeft) return
+    const still =
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      !!rail.closest('.mirava-motion-paused')
+    rail.scrollTo({ left: Math.max(0, target), behavior: still ? 'instant' : 'smooth' })
+  }, [index])
+
+  // Only the focused rail uses these shortcuts; native range/input keys stay native.
+  const onRailKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.altKey || e.ctrlKey || e.metaKey) return
+    if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return
+    e.preventDefault()
+    const cur = indexRef.current
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? LAST : cur + (e.key === 'ArrowRight' ? 1 : -1)
+    const clamped = Math.max(0, Math.min(LAST, next))
+    goTo(clamped)
+    if ((e.target as HTMLElement).classList.contains('time-node')) nodeRefs.current[clamped]?.focus({ preventScroll: true })
+  }
 
   const key = ERA_ORDER[index]
   const era = ERAS[key]
@@ -136,9 +154,23 @@ export function TimeTravel() {
         </div>
       </div>
 
+      <TimeCompare />
+
       {/* The interactive timeline rail */}
       <div className="time-timeline-wrap">
-        <div className="time-timeline-track" id="timeRail" ref={trackRef}>
+        <div className="mirava-timeline-guide">
+          <span>CHOOSE YOUR MOMENT</span>
+          <span>Swipe the eras · or use the gold slider</span>
+        </div>
+        <div
+          className="time-timeline-track"
+          id="timeRail"
+          ref={trackRef}
+          tabIndex={0}
+          role="group"
+          aria-label="Choose an era. Use left and right arrow keys, Home, or End."
+          onKeyDown={onRailKey}
+        >
           {NODES.map((n, i) => (
             <button
               key={n.year}
@@ -147,6 +179,7 @@ export function TimeTravel() {
                 nodeRefs.current[i] = el
               }}
               className={`time-node${i === index ? ' active' : ''}`}
+              aria-pressed={i === index}
               data-year={n.year}
               onClick={() => goTo(i)}
             >
@@ -175,6 +208,7 @@ export function TimeTravel() {
             className="time-slider"
             id="timeSlider"
             aria-label="Time slider"
+            aria-valuetext={`${Math.abs(yearVal)} ${yearVal < 0 ? 'BCE' : 'CE'}: ${era.title}`}
             style={{
               background: `linear-gradient(90deg, rgba(244,187,64,0.85) 0%, rgba(244,187,64,0.85) ${pct}%, rgba(245,234,217,0.12) ${pct}%)`,
             }}
@@ -200,6 +234,19 @@ export function TimeTravel() {
           <div className="stage-ring ring-2"></div>
           <div className="stage-ring ring-3"></div>
           <div className="stage-floaty" id="stageFloaty"></div>
+          <div className="mirava-armillary-label" aria-hidden="true">
+            THE WHEEL OF TIME
+          </div>
+          <div className="mirava-armillary" aria-hidden="true">
+            <span className="armillary-ring">
+              <i></i>
+            </span>
+            <span className="armillary-ring">
+              <i></i>
+            </span>
+            <span className="armillary-ring"></span>
+            <span className="armillary-ring"></span>
+          </div>
 
           <div className="stage-number">
             <small>ERA</small>
@@ -232,13 +279,13 @@ export function TimeTravel() {
           <span>Historical-cultural exploration · Interpretive journey across 2,500+ years</span>
         </div>
         <div className="time-footer-right">
-          <button type="button" className="footer-nav" id="prevEraBtn" aria-label="Previous era" onClick={() => goTo(index - 1)}>
+          <button type="button" className="footer-nav" id="prevEraBtn" aria-label="Previous era" disabled={index === 0} onClick={() => goTo(index - 1)}>
             ←
           </button>
           <span id="eraCounter">
             {index + 1} / {ERA_ORDER.length}
           </span>
-          <button type="button" className="footer-nav" id="nextEraBtn" aria-label="Next era" onClick={() => goTo(index + 1)}>
+          <button type="button" className="footer-nav" id="nextEraBtn" aria-label="Next era" disabled={index === LAST} onClick={() => goTo(index + 1)}>
             →
           </button>
         </div>

@@ -1,69 +1,123 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { t as translate, useLanguage, type Language } from '../../../i18n'
 import { api, type NewsItem } from '../../../lib/api'
-import { STORY_DATA } from '../data/news'
 import { useEscape, useScrollLock } from '../util'
 
-const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1600100397608-f0104b8c0e0c?auto=format&fit=crop&w=1200&q=80'
+/*
+ * New explore.html: the original hard-coded newsroom stays hidden; only
+ * admin-published stories (api.news.list) appear, as "Published dispatches"
+ * cards with an article dialog (from public/mirava-live.js). Those blocks are
+ * self-localised (data-mirava-localized), so their labels carry both languages
+ * here and stories use the admin's *_hi fields in Hindi mode.
+ */
+const COPY = {
+  editorial: ['FROM THE MIRAVA EDITORIAL DESK', 'मिरावा संपादकीय विभाग से'],
+  dispatches: ['Published dispatches', 'प्रकाशित समाचार'],
+  emptyNews: [
+    'No published stories yet. Admins can publish and replace all news here.',
+    'संपादकों की नई खबरें यहाँ दिखेंगी। नीचे विरासत संग्रह देखें।',
+  ],
+  loading: ['Loading…', 'लोड हो रहा है…'],
+  unavailable: ['Live content is temporarily unavailable. Please retry.', 'नई सामग्री अभी उपलब्ध नहीं है। फिर कोशिश करें।'],
+  retry: ['Retry', 'फिर कोशिश करें'],
+  fallback: ['English original — Hindi translation pending', 'मूल अंग्रेज़ी सामग्री — हिंदी अनुवाद बाकी है'],
+  close: ['Close dialog', 'संवाद बंद करें'],
+  dialog: ['MIRAVA interactive experience', 'मिरावा का संवाद'],
+  read: ['Read {title}', '{title} पढ़ें'],
+  count: ['{count} editor dispatches', 'संपादकों की {count} खबरें'],
+  source: ['Source', 'स्रोत'],
+} satisfies Record<string, [string, string]>
 
-interface ModalStory {
-  tag: string
-  title: string
-  meta: string[]
-  body: string
-  source?: string | null
-  foot: string
-}
-
-const safeImage = (url: string | null) => (url && /^(https?:\/\/|data:image\/)/i.test(url.trim()) ? url.trim() : FALLBACK_IMAGE)
-const safeLink = (url: string | null) => (url && /^https?:\/\//i.test(url.trim()) ? url.trim() : null)
-const shortDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-const longDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-
-function staticStory(key: string): ModalStory | null {
-  const d = STORY_DATA[key]
-  return d ? { tag: d.tag, title: d.title, meta: d.meta, body: d.body, foot: 'July 31, 2026' } : null
-}
-
-function adminStory(n: NewsItem): ModalStory {
-  const category = n.category || 'Heritage'
-  return {
-    tag: `${category.toUpperCase()} · ${shortDate(n.published_at).toUpperCase()}`,
-    title: n.title,
-    meta: ['Mirava Heritage Desk', category],
-    body: n.body || n.summary,
-    source: safeLink(n.source_url),
-    foot: longDate(n.published_at),
-  }
-}
-
-/** Static stories from the legacy page; shown when no admin news is published. */
-const STATIC_STREAM: { key: string; cat: string; small: string; time: string; title: string; text: string }[] = [
-  { key: 'Restoration', cat: 'Restoration', small: 'RESTORATION', time: '2h ago', title: 'New conservation methods for old stone', text: 'A quiet revolution is happening in conservation labs — breathable consolidants are changing how we treat centuries-old sandstone.' },
-  { key: 'Discovery', cat: 'Archaeology', small: 'ANCIENT DISCOVERIES', time: '5h ago', title: 'A small seal, a very large question', text: 'A newly surfaced Indus seal fragment has reignited one of the oldest debates in South Asian archaeology — what did the script mean?' },
-  { key: 'Culture', cat: 'Culture', small: 'CULTURE', time: '1d ago', title: 'The makers putting handloom back on the map', text: 'A new generation of weavers is reimagining traditional looms — and finding global audiences without losing the grammar of the craft.' },
-  { key: 'Pattadakal', cat: 'Restoration', small: 'RESTORATION', time: '2d ago', title: "Pattadakal's stone is breathing again", text: 'A ten-year conservation project at the Chalukyan site has removed decades of damaging coatings without harming original carvings.' },
+const MONUMENT_PHOTOS = [
+  {
+    name: 'Dholavira · Gujarat',
+    label: 'Harappan reservoir',
+    img: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/7/78/Water_reservoir_at_Dholavira_site.jpg/960px-Water_reservoir_at_Dholavira_site.jpg',
+    source: 'https://commons.wikimedia.org/wiki/File:Water_reservoir_at_Dholavira_site.jpg',
+    credit: 'Bhajish Bharathan · CC BY-SA 4.0',
+  },
+  {
+    name: 'Hampi · Karnataka',
+    label: 'Stone Chariot at Vittala Temple',
+    img: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2e/Hampi_chariot.jpg/960px-Hampi_chariot.jpg',
+    source: 'https://commons.wikimedia.org/wiki/File:Hampi_chariot.jpg',
+    credit: 'Apadegal · CC BY-SA 3.0',
+  },
+  {
+    name: 'Konark · Odisha',
+    label: 'Sun Temple',
+    img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Sun_Temple_of_Konark.jpg/960px-Sun_Temple_of_Konark.jpg',
+    source: 'https://commons.wikimedia.org/wiki/File:Sun_Temple_of_Konark.jpg',
+    credit: 'Pkumark · CC BY-SA 3.0',
+  },
 ]
 
+const fill = (s: string, p: Record<string, string | number> = {}) => s.replace(/\{(\w+)\}/g, (_, k) => String(p[k] ?? ''))
+const copy = (lang: Language, key: keyof typeof COPY, p?: Record<string, string | number>) =>
+  fill(COPY[key][lang === 'hi' ? 1 : 0], p)
+const safeLink = (url: string | null) => (url && /^https?:\/\//i.test(url.trim()) ? url.trim() : null)
+const safeImage = (url: string | null) => (url && /^(https?:\/\/|\/|data:image\/)/i.test(url.trim()) ? url.trim() : null)
+
+interface Authored {
+  text: string
+  lang: Language
+  /** Hindi mode, but neither an admin translation nor a dictionary entry exists. */
+  missing: boolean
+}
+
+/** Admin-written text: the *_hi field in Hindi mode, else the dictionary, else English. */
+function authored(lang: Language, en: string, hi: string | null | undefined): Authored {
+  if (lang !== 'hi' || !en) return { text: en, lang: 'en', missing: false }
+  if (hi && hi.trim()) return { text: hi, lang: 'hi', missing: false }
+  const viaDictionary = translate(en)
+  return viaDictionary !== en ? { text: viaDictionary, lang: 'hi', missing: false } : { text: en, lang: 'en', missing: true }
+}
+
+function storyText(lang: Language, n: NewsItem) {
+  const title = authored(lang, n.title, n.title_hi)
+  const summary = authored(lang, n.summary, n.summary_hi)
+  const category = authored(lang, n.category || 'Heritage', n.category_hi)
+  const body = authored(lang, n.body || n.summary, n.body_hi || (n.body ? null : n.summary_hi))
+  return { title, summary, category, body, missing: title.missing || summary.missing || body.missing }
+}
+
+function Text({ as: Tag, value, className }: { as: 'div' | 'h2' | 'h3' | 'p'; value: Authored; className?: string }) {
+  return (
+    <Tag className={className} translate="no" lang={value.lang}>
+      {value.text}
+    </Tag>
+  )
+}
+
 export function Newsroom() {
-  const { data } = useQuery({ queryKey: ['news', 10], queryFn: () => api.news.list(10), staleTime: 60_000 })
+  const lang = useLanguage()
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: ['news', 10],
+    queryFn: () => api.news.list(10),
+    staleTime: 60_000,
+  })
   const items = (data ?? []).filter((n) => n.title && n.summary)
-  const hasAdmin = items.length > 0
 
-  const [story, setStory] = useState<ModalStory | null>(null)
-  const [open, setOpen] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const story = openId ? items.find((n) => n.id === openId) : undefined
+  const open = !!story
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const previousFocus = useRef<HTMLElement | null>(null)
   useScrollLock(open)
-  useEscape(open, () => setOpen(false))
-  const show = (s: ModalStory | null) => {
-    if (!s) return
-    setStory(s)
-    setOpen(true)
-  }
+  useEscape(open, () => setOpenId(null))
+  useEffect(() => {
+    if (open) closeRef.current?.focus()
+    else previousFocus.current?.focus?.()
+  }, [open])
 
-  const lead = items[0]
-  const rest = items.slice(1, 5)
+  const show = (id: string) => {
+    previousFocus.current = document.activeElement as HTMLElement | null
+    setOpenId(id)
+  }
+  const s = story ? storyText(lang, story) : null
+  const sourceUrl = story ? safeLink(story.source_url) : null
+  const storyImage = story ? safeImage(story.image_url) : null
 
   return (
     <>
@@ -86,126 +140,85 @@ export function Newsroom() {
               <em>unearthed now.</em>
             </h2>
             <p className="news-lede">
-              Live dispatches from the field — archaeology, restoration, culture and the quiet work of keeping heritage
+              Admin-managed dispatches — archaeology, restoration, culture and the quiet work of keeping heritage
               alive.
             </p>
-            <div className={`admin-published-ribbon${hasAdmin ? ' show' : ''}`} id="adminPublishedRibbon">
-              <i></i>
-              <span>Administrator-updated feed</span>
-            </div>
           </div>
           <div className="news-header-right">
             <div className="news-live-badge">
               <span className="live-dot"></span>
-              <span>LIVE FEED</span>
-              <span className="live-count" id="newsLiveCount">
-                {hasAdmin ? `${items.length} administrator dispatch${items.length === 1 ? '' : 'es'}` : '5 dispatches'}
+              <span>HERITAGE DESK</span>
+              <span className="live-count" id="newsLiveCount" data-mirava-localized="true">
+                {data ? copy(lang, 'count', { count: items.length.toLocaleString(lang === 'hi' ? 'hi-IN' : 'en-IN') }) : '5 dispatches'}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="newsroom-layout">
-          {hasAdmin ? (
-            <>
-              <article className="news-lead" data-cat={lead.category || 'Heritage'} onClick={() => show(adminStory(lead))}>
-                <div className="news-lead-image">
-                  <img src={safeImage(lead.image_url)} alt={lead.title} />
-                  <div className="news-lead-veil"></div>
-                  <div className="news-lead-tag">
-                    <span className="tag-dot"></span>
-                    <span>
-                      {(lead.category || 'HERITAGE').toUpperCase()} · {shortDate(lead.published_at).toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-                <div className="news-lead-body">
-                  <span className="news-lead-kicker">ADMINISTRATOR DISPATCH</span>
-                  <h3>{lead.title}</h3>
-                  <p>{lead.summary}</p>
-                  <div className="news-lead-meta">
-                    <span>Mirava Heritage Desk</span>
-                    <span className="meta-dot"></span>
-                    <span>{shortDate(lead.published_at)}</span>
-                  </div>
-                  <button className="news-open-btn" type="button">
-                    Open full story <span>↗</span>
-                  </button>
-                </div>
-              </article>
-              <div className="news-stream" id="newsStream">
-                {rest.map((n, i) => (
-                  <article key={n.id} className="news-item" data-cat={n.category || 'Heritage'} onClick={() => show(adminStory(n))}>
-                    <div className="news-item-index">{String(i + 2).padStart(2, '0')}</div>
-                    <div className="news-item-body">
-                      <div className="news-item-top">
-                        <small>{(n.category || 'HERITAGE').toUpperCase()}</small>
-                        <span className="news-item-time">{shortDate(n.published_at)}</span>
-                      </div>
-                      <h3>{n.title}</h3>
-                      <p>{n.summary}</p>
-                      <div className="news-item-foot">
-                        <span className="news-read">Read →</span>
-                      </div>
+        {/* Admin-published stories (replaces the hidden hard-coded newsroom). */}
+        <div id="publishedNews" data-mirava-localized="true">
+          <div className="cms-kicker" id="cmsEditorial">
+            {copy(lang, 'editorial')}
+          </div>
+          <h3 id="cmsDispatches" style={{ font: '600 32px Playfair Display,serif', margin: '13px 0' }}>
+            {copy(lang, 'dispatches')}
+          </h3>
+          <div id="cmsNewsCards" className="cms-news-grid">
+            {isPending ? (
+              <p className="cms-news-empty">{copy(lang, 'loading')}</p>
+            ) : isError ? (
+              <p className="cms-news-empty">
+                {copy(lang, 'unavailable')}{' '}
+                <button type="button" className="cms-option" style={{ width: 'auto' }} onClick={() => void refetch()}>
+                  {copy(lang, 'retry')}
+                </button>
+              </p>
+            ) : items.length === 0 ? (
+              <p className="cms-news-empty">{copy(lang, 'emptyNews')}</p>
+            ) : (
+              items.map((n) => {
+                const st = storyText(lang, n)
+                const img = safeImage(n.image_url)
+                return (
+                  <button
+                    key={n.id}
+                    type="button"
+                    className="cms-news-card"
+                    aria-label={copy(lang, 'read', { title: st.title.text })}
+                    onClick={() => show(n.id)}
+                  >
+                    {img && (
+                      <img
+                        src={img}
+                        alt={st.title.text}
+                        loading="lazy"
+                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                      />
+                    )}
+                    <div className="cms-pad">
+                      <Text as="div" className="cms-kicker" value={st.category} />
+                      <Text as="h3" value={st.title} />
+                      <Text as="p" value={st.summary} />
+                      {st.missing && <span className="mirava-language-fallback">{copy(lang, 'fallback')}</span>}
                     </div>
-                  </article>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              {/* ---------- LEAD STORY ---------- */}
-              <article className="news-lead" data-news-card="Dholavira" data-cat="Archaeology" onClick={() => show(staticStory('Dholavira'))}>
-                <div className="news-lead-image">
-                  <img
-                    src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRtttuUySAHjoY9MBih6Uw4RLikXeIgc7zXSdYQP_R9bg&s=10"
-                    alt="Heritage architecture"
-                  />
-                  <div className="news-lead-veil"></div>
-                  <div className="news-lead-tag">
-                    <span className="tag-dot"></span>
-                    <span>ARCHAEOLOGY · JUL 31, 2026</span>
-                  </div>
-                </div>
-                <div className="news-lead-body">
-                  <span className="news-lead-kicker">EXCLUSIVE DISPATCH</span>
-                  <h3>How a desert city keeps rewriting what we know.</h3>
-                  <p>
-                    New readings of Dholavira's reservoir system suggest the city wasn't just surviving scarcity — it was
-                    engineering around it with astonishing precision.
-                  </p>
-                  <div className="news-lead-meta">
-                    <span>By Mirava Desk</span>
-                    <span className="meta-dot"></span>
-                    <span>6 min read</span>
-                  </div>
-                  <button className="news-open-btn" type="button">
-                    Open full story <span>↗</span>
                   </button>
-                </div>
-              </article>
+                )
+              })
+            )}
+          </div>
+        </div>
 
-              {/* ---------- STORY LIST ---------- */}
-              <div className="news-stream" id="newsStream">
-                {STATIC_STREAM.map((s, i) => (
-                  <article key={s.key} className="news-item" data-news-card={s.key} data-cat={s.cat} onClick={() => show(staticStory(s.key))}>
-                    <div className="news-item-index">{String(i + 2).padStart(2, '0')}</div>
-                    <div className="news-item-body">
-                      <div className="news-item-top">
-                        <small>{s.small}</small>
-                        <span className="news-item-time">{s.time}</span>
-                      </div>
-                      <h3>{s.title}</h3>
-                      <p>{s.text}</p>
-                      <div className="news-item-foot">
-                        <span className="news-read">Read →</span>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </>
-          )}
+        <div className="cms-portrait-strip" id="miravaMonumentPhotos">
+          {MONUMENT_PHOTOS.map((photo) => (
+            <figure key={photo.name}>
+              <a href={photo.source} target="_blank" rel="noopener noreferrer" aria-label={`Image credits for ${photo.name}`}>
+                <img src={photo.img} alt={`${photo.label}, ${photo.name}`} loading="lazy" />
+              </a>
+              <figcaption>
+                {photo.name} · {photo.label} · {photo.credit}
+              </figcaption>
+            </figure>
+          ))}
         </div>
 
         {/* ---------- FOOTER ---------- */}
@@ -214,50 +227,59 @@ export function Newsroom() {
             <span className="news-footer-dot"></span>
             <span>Updated continuously · Mirava heritage desk</span>
           </div>
-          <div className="news-footer-right">
-            <span>6 dispatches</span>
-            <span className="footer-sep">·</span>
-            <span>4 categories</span>
-            <span className="footer-sep">·</span>
-            <span>Jul 31, 2026</span>
-          </div>
+          {items.length > 0 && (
+            <div className="news-footer-right">
+              <span>{items.length === 1 ? '1 dispatch' : `${items.length} dispatches`}</span>
+              <span className="footer-sep">·</span>
+              <span>{(() => { const n = new Set(items.map((i) => i.category)).size; return n === 1 ? '1 category' : `${n} categories` })()}</span>
+              <span className="footer-sep">·</span>
+              <span>
+                {new Date(items[0].published_at).toLocaleDateString(lang === 'hi' ? 'hi-IN' : 'en-IN', {
+                  day: 'numeric', month: 'short', year: 'numeric',
+                })}
+              </span>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* Story reader (outside the section so position:fixed is not trapped by its transform) */}
-      <div id="newsStoryModal" className={`news-modal${open ? ' open' : ''}`}>
-        <div className="news-modal-backdrop" onClick={() => setOpen(false)}></div>
-        <div className="news-modal-box" role="dialog" aria-modal="true">
-          <button type="button" className="news-modal-close" aria-label="Close" onClick={() => setOpen(false)}>
+      {/* Article dialog (outside the section so position:fixed is not trapped by its transform). */}
+      <div
+        className="cms-modal"
+        id="cmsModal"
+        hidden={!open}
+        data-mirava-localized="true"
+        onClick={(e) => e.target === e.currentTarget && setOpenId(null)}
+      >
+        <div className="cms-modal-panel" role="dialog" aria-modal="true" aria-label={copy(lang, 'dialog')} tabIndex={-1}>
+          <button
+            ref={closeRef}
+            type="button"
+            className="cms-modal-close"
+            aria-label={copy(lang, 'close')}
+            onClick={() => setOpenId(null)}
+          >
             ×
           </button>
-          {story && (
+          {story && s && (
             <>
-              <span className="news-modal-tag" id="newsModalTag">
-                {story.tag}
-              </span>
-              <h2 id="newsModalTitle">{story.title}</h2>
-              <div className="news-modal-meta" id="newsModalMeta">
-                {story.meta.map((m) => (
-                  <span key={m}>{m}</span>
-                ))}
-              </div>
-              <p id="newsModalBody" style={{ whiteSpace: 'pre-line' }}>
-                {story.body}
+              <Text as="div" className="cms-kicker" value={s.category} />
+              <Text as="h2" value={s.title} />
+              {s.missing && <span className="mirava-language-fallback">{copy(lang, 'fallback')}</span>}
+              {storyImage && (
+                <img className="cms-modal-img" src={storyImage} alt={s.title.text} onError={(e) => (e.currentTarget.style.display = 'none')} />
+              )}
+              <p translate="no" lang={s.body.lang} style={{ whiteSpace: 'pre-line' }}>
+                {s.body.text}
               </p>
-              {story.source && (
+              {sourceUrl && (
                 <p>
-                  <b>Source:</b>{' '}
-                  <a href={story.source} target="_blank" rel="noopener noreferrer">
-                    {story.source}
+                  <b>{copy(lang, 'source')}:</b>{' '}
+                  <a href={sourceUrl} target="_blank" rel="noopener noreferrer" translate="no">
+                    {sourceUrl}
                   </a>
                 </p>
               )}
-              <div className="news-modal-foot">
-                <span>Mirava heritage desk</span>
-                <span>·</span>
-                <span>{story.foot}</span>
-              </div>
             </>
           )}
         </div>

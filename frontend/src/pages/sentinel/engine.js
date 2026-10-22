@@ -2,7 +2,8 @@
 // Mirava Sentinel app logic, ported from legacy/Sentinel.html. Runs inside
 // `root` via useLegacyPage; everything it starts is torn down in the returned cleanup.
 import { CV } from './cv.js';
-import { buildTicketPDF, buildPatrolPDF } from './pdf.js';
+import { PDF, buildTicketPDF, buildPatrolPDF, sentinelText, sentinelLocale } from './pdf.js';
+import { initVision } from './vision.js';
 import { Samples } from './samples.js';
 import { MONUMENTS, MATERIALS, SUBSTRATE, LEGAL, REMEDY, LEVELS } from './data.js';
 
@@ -369,7 +370,7 @@ export function init(root, ctx) {
       const on = sel === i;
       ctx.lineWidth = on ? lw * 2 : lw; ctx.strokeStyle = f.color; ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = on ? 10 : 4;
       ctx.setLineDash(f.sev === 3 ? [] : [lw * 4, lw * 2.5]); ctx.strokeRect(x, y, w, h); ctx.setLineDash([]); ctx.shadowBlur = 0;
-      const tag = `#${f.no} ${f.short} · L${f.sev}${f.manual ? ' · marked' : ''}`, tw = ctx.measureText(tag).width + fs * 0.8, th = fs * 1.45;
+      const tag = sentinelText(`#${f.no} ${f.short} · L${f.sev}${f.manual ? ' · marked' : ''}`), tw = ctx.measureText(tag).width + fs * 0.8, th = fs * 1.45;
       let ty = y - th - 2; if (ty < 0) ty = y + 2; let tx = Math.min(Math.max(0, x), r.w - tw);
       ctx.fillStyle = f.color; ctx.fillRect(tx, ty, tw, th);
       ctx.fillStyle = ['#ffffff', '#ffd23f', '#5ad8ff', '#4cd964'].includes(f.color) ? '#1a0d10' : '#ffffff';
@@ -415,7 +416,7 @@ export function init(root, ctx) {
   function trendFor(monId, cur) {
     const prev = idxLoad().filter(e => e.mon && e.mon.id === monId && e.mhi != null && e.src !== 'demo' && (!S.inspStart || e.ts < S.inspStart)).sort((a, b) => b.ts.localeCompare(a.ts))[0];
     if (!prev) return null;
-    const d = cur - prev.mhi, when = new Date(prev.ts).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    const d = cur - prev.mhi, when = new Date(prev.ts).toLocaleDateString(sentinelLocale(), { day: '2-digit', month: 'short' });
     return { prev: prev.mhi, d, when, text: `${prev.mhi} → ${cur} (${d === 0 ? 'no change' : (d > 0 ? '▲ ' : '▼ ') + Math.abs(d)}) since ${when}` };
   }
   function renderTriage() {
@@ -426,7 +427,7 @@ export function init(root, ctx) {
     const man = included().filter(f => f.manual).length;
     $('#triage').innerHTML = `<div class="thead"><div><span class="lvl l${L.level}">${L.level ? `Severity · Level ${L.level}` : 'All clear'} — ${lv.name}</span>
       <h2>${esc(levelDesc(L))}</h2></div><div class="gwrap" title="Monument Health Index: 100 minus weighted penalties for each finding's severity and extent">${gaugeSVG(H.v, H.color)}<span class="band" style="background:${H.color}">${H.band}</span></div></div>
-      <p>${L.level ? `Primary defect: <b>${esc(L.primary.name)}</b> (${esc(L.primary.pos)}). ${L.level === 3 ? 'Raise an incident ticket and alert the site in-charge now.' : L.level === 2 ? 'Schedule conservation and keep monitoring this spot.' : 'Log it and re-check on the next routine visit.'}` : 'Nothing crossed the detection thresholds. If you can see damage, photograph it closer and in even daylight, or raise the sensitivity.'}</p>
+      <p>${L.level ? `Primary defect: <b>${esc(L.primary.name)}</b> (<span>${esc(L.primary.pos)}</span>). <span>${L.level === 3 ? 'Raise an incident ticket and alert the site in-charge now.' : L.level === 2 ? 'Schedule conservation and keep monitoring this spot.' : 'Log it and re-check on the next routine visit.'}</span>` : 'Nothing crossed the detection thresholds. If you can see damage, photograph it closer and in even daylight, or raise the sensitivity.'}</p>
       <div class="tm"><div><small>Affected surface</small><b>${fmtA(L.area)}</b></div><div><small>Response window</small><b>${esc(lv.resp)}</b></div><div><small>Findings included</small><b>${included().length} of ${r.findings.length}${man ? ` <em class="mk">${man} marked</em>` : ''}</b></div><div><small>Material</small><b>${esc(m.materialLabel)}</b></div>${extra}<div class="wide"><small>Health trend at this site</small><b class="${tr ? (tr.d < 0 ? 'dn' : tr.d > 0 ? 'up' : '') : ''}">${tr ? esc(tr.text) : 'First assessment logged here'}</b></div></div>`;
   }
   /* close-up crop of a finding, with its box outlined */
@@ -451,7 +452,7 @@ export function init(root, ctx) {
     if (!r.findings.length) { fl.innerHTML = `<div class="empty">✅ No anomalies detected at sensitivity ${$('#sens').value}/10.</div>`; return; }
     fl.innerHTML = r.findings.map((f, i) => `<div class="fi ${f.include ? '' : 'off'} ${S.sel === i ? 'sel' : ''}" data-i="${i}">
       <span class="crop" style="border-color:${f.color}"><img src="${thumbOf(f)}" alt="Close-up of finding ${f.no}" loading="lazy"></span>
-      <div><b>#${f.no} ${esc(f.name)}${f.manual ? ' <em class="mk">✎ marked</em>' : ''}</b><small>${esc(f.pos)} · ${esc(f.detail)}${f.manual ? '' : ' · signal ' + f.signal}</small></div>
+      <div><b>#${f.no} ${esc(f.name)}${f.manual ? ' <em class="mk">✎ marked</em>' : ''}</b><small><span>${esc(f.pos)}</span> · <span>${esc(f.detail)}</span>${f.manual ? '' : ' · <span>signal</span> <span>' + esc(f.signal) + '</span>'}</small></div>
       <div class="tg"><span class="badge s${f.sev}">${['', 'LOW', 'MEDIUM', 'CRITICAL'][f.sev]}</span>${f.manual ? `<button class="del" type="button" data-del="${i}" aria-label="Delete marked finding ${f.no}" title="Delete this mark">✕</button>` : `<input type="checkbox" ${f.include ? 'checked' : ''} aria-label="Include finding ${f.no} in ticket" data-t="${i}">`}</div></div>`).join('');
     fl.querySelectorAll('.fi').forEach(el => el.addEventListener('click', e => {
       const i = +el.dataset.i;
@@ -469,9 +470,9 @@ export function init(root, ctx) {
     const r = S.res; if (!r) return; const G = recoGroups(), m = monument();
     const defaced = G.some(g => g.type === 'paint' || g.type === 'carving');
     $('#reco').innerHTML = `<h3>Recommended heritage-safe conservation action</h3><div class="sub">Tuned for ${esc(m.materialLabel)} at ${esc(m.name)}. Based on traditional, reversible conservation practice.</div>
-      ${G.length ? G.map(g => `<div class="rg"><h4><span class="badge s${g.sev}">L${g.sev}</span>${esc(g.title)}</h4><ol>${g.actions.map(a => `<li>${esc(a)}</li>`).join('')}</ol><div class="avoid"><b>Avoid:</b> ${esc(g.avoid.join('; '))}.</div></div>`).join('') : '<p class="sub">No action needed beyond routine monitoring.</p>'}
+      ${G.length ? G.map(g => `<div class="rg"><h4><span class="badge s${g.sev}">L${g.sev}</span>${esc(g.title)}</h4><ol>${g.actions.map(a => `<li>${esc(a)}</li>`).join('')}</ol><div class="avoid"><b>Avoid:</b> ${g.avoid.map(a => `<span>${esc(a)}</span>`).join('; ')}.</div></div>`).join('') : '<p class="sub">No action needed beyond routine monitoring.</p>'}
       <div class="subnote">🪨 <b>Substrate note — ${esc(m.materialLabel)}:</b> ${esc(SUBSTRATE[m.mat])}</div>
-      ${defaced ? `<p class="legal">⚖️ ${esc(LEGAL)}</p>` : ''}`;
+      ${defaced ? `<p class="legal">⚖️ <span>${esc(LEGAL)}</span></p>` : ''}`;
   }
   function renderResults(keepView) {
     $('#results').classList.add('on');
@@ -494,7 +495,7 @@ export function init(root, ctx) {
     return {
       id: ticketId(), ts: now.toISOString(),
       mhi: H.v, mhiBand: H.band, mhiColor: H.color, trend: tr ? tr.text : '', notes: $('#notes').value.trim(), closeups, types, ptype: L.primary ? L.primary.type : null, manualCount: inc.filter(f => f.manual).length,
-      tsText: now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST',
+      tsText: now.toLocaleString(sentinelLocale(), { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: !sentinelLocale().startsWith('hi') }) + ' IST',
       mode: r.mode, monument: m, gps: S.gps, inspector: $('#insp').value.trim(), role: $('#role').value,
       imageInfo: r.mode === 'single' ? `${S.imgs.single.name} (${S.imgs.single.ow}x${S.imgs.single.oh})` : `${S.imgs.before.name} vs ${S.imgs.after.name}`,
       level: L.level, levelName: LEVELS[L.level].name, levelDesc: levelDesc(L), primary: L.primary ? L.primary.name : 'None', areaText: fmtA(L.area), response: LEVELS[L.level].resp,
@@ -506,13 +507,30 @@ export function init(root, ctx) {
       images: imgs, thumb: jpeg(canvasFor(r.mode === 'single' ? 'boxes' : 'heat'), 160, 0.7).dataURL
     };
   }
-  const safeName = s => String(s).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
+  const safeName = s => String(s).replace(/[^\p{L}\p{N}.-]+/gu, '-').replace(/^-|-$/g, '');
   function ticketText(t) {
-    return [`Monument Health Ticket ${t.id}`, `${t.monument.name} — ${t.monument.location}`, `Severity: Level ${t.level} ${t.levelName} (${t.levelDesc})`, t.mhi != null ? `Health Index: ${t.mhi}/100 (${t.mhiBand})${t.trend ? ' · trend ' + t.trend : ''}` : '', `Primary defect: ${t.primary} · Affected area ${t.areaText} · ${t.findings.length} finding(s)`, `Response: ${t.response}`, t.gps ? `GPS: ${t.gps}` : '', t.notes ? `Notes: ${t.notes}` : '', `Inspector: ${t.inspector || 'not given'} (${t.role}) · ${t.tsText}`].filter(Boolean).join('\n');
+    const tr = sentinelText;
+    return [
+      `${tr('Monument Health Ticket')} ${t.id}`, `${tr(t.monument.name)} — ${tr(t.monument.location)}`,
+      `${tr('Severity')}: ${tr('Level')} ${t.level} ${tr(t.levelName)} (${tr(t.levelDesc)})`,
+      t.mhi != null ? `${tr('Health Index')}: ${t.mhi}/100 (${tr(t.mhiBand)})${t.trend ? ' · ' + tr('Trend') + ' ' + tr(t.trend) : ''}` : '',
+      `${tr('Primary defect')}: ${tr(t.primary)} · ${tr('Affected area')} ${t.areaText} · ${tr('Findings')}: ${t.findings.length}`,
+      `${tr('Response')}: ${tr(t.response)}`, t.gps ? `${tr('GPS')}: ${t.gps}` : '',
+      t.notes ? `${tr('Notes')}: ${t.notes}` : '',
+      `${tr('Inspector')}: ${t.inspector || tr('Not given')} (${tr(t.role)}) · ${tr(t.tsText)}`
+    ].filter(Boolean).join('\n');
   }
-  function showPdf(blob, fn, title, sub, text) {
+  function datedReport(report) {
+    if (!report.ts || !Number.isFinite(new Date(report.ts).getTime())) return report;
+    return { ...report, tsText: new Date(report.ts).toLocaleString(sentinelLocale(), { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: !sentinelLocale().startsWith('hi') }) + ' IST' };
+  }
+  function patrolText(p) {
+    const tr = sentinelText;
+    return [`${tr('Patrol summary')} ${p.id}`, `${tr('Photos')}: ${p.stats.photos} · ${p.sites.map(tr).join(', ')}`, `${tr('Critical')} ${p.stats.crit} · ${tr('Medium')} ${p.stats.med} · ${tr('Low')} ${p.stats.low} · ${tr('Clear')} ${p.stats.clear} · ${tr('Average health index')} ${p.stats.avg}`, ...p.entries.filter(e => e.level >= 2).map(e => `• ${tr('Level')} ${e.level} ${tr(e.mon)}: ${tr(e.primary)} (${e.name})`), `${tr('Inspector')}: ${p.inspector || tr('Not given')} · ${tr(p.tsText)}`].join('\n');
+  }
+  function showPdf(blob, fn, title, sub, text, report) {
     if (S.pdfUrl) URL.revokeObjectURL(S.pdfUrl);
-    S.pdfUrl = URL.createObjectURL(blob); S.cur = { blob, fn, title, text };
+    S.pdfUrl = URL.createObjectURL(blob); S.cur = { blob, fn, title: sentinelText(title), text, report };
     $('#pdfDl').href = S.pdfUrl; $('#pdfDl').download = fn; $('#pdfOpen').href = S.pdfUrl;
     $('#tTitleT').textContent = title; $('#tSub').textContent = sub + ` · ${Math.round(blob.size / 1024)} KB`;
     let canShare = false; try { canShare = !!(navigator.canShare && navigator.canShare({ files: [new File([blob], fn, { type: 'application/pdf' })] })); } catch (e) {}
@@ -523,10 +541,12 @@ export function init(root, ctx) {
     $('#tModal').classList.add('on'); lockScroll(true);
     setTimeout(() => $('#pdfDl').focus(), 50);
   }
-  function openTicket(t) {
+  async function openTicket(t) {
+    t = datedReport(t);
     let blob;
-    try { blob = buildTicketPDF(t); } catch (e) { console.error(e); toast('Could not build the PDF. Please try again.', true); return; }
-    showPdf(blob, `${t.id}_${safeName(t.monument.name)}.pdf`, 'Monument Health Assessment Ticket', `${t.id} · ${t.monument.name} · Level ${t.level} ${t.levelName}${t.mhi != null ? ` · MHI ${t.mhi}` : ''}`, ticketText(t));
+    try { await PDF.ready(); blob = buildTicketPDF(t); } catch (e) { console.error(e); toast('Could not build the PDF. Please try again.', true); return; }
+    if (!alive) return;
+    showPdf(blob, `${t.id}_${safeName(t.monument.name)}.pdf`, 'Monument Health Assessment Ticket', `${t.id} · ${t.monument.name} · Level ${t.level} ${t.levelName}${t.mhi != null ? ` · MHI ${t.mhi}` : ''}`, ticketText(t), { kind: 'ticket', data: t });
   }
   $('#pdfShare').onclick = async () => {
     const c = S.cur; if (!c) return;
@@ -693,13 +713,13 @@ export function init(root, ctx) {
   $('#qtags').innerHTML = QTAGS.map(t => `<button type="button" class="chip">+ ${esc(t)}</button>`).join('');
   const nCount = () => { $('#nCount').textContent = notes.value.length; };
   notes.addEventListener('input', nCount);
-  $('#qtags').querySelectorAll('button').forEach((b, i) => b.onclick = () => { const t = QTAGS[i]; if (notes.value.includes(t)) return; notes.value = (notes.value.trim() ? notes.value.trim().replace(/[.;]?$/, '. ') : '') + t + '.'; nCount(); });
+  $('#qtags').querySelectorAll('button').forEach((b, i) => b.onclick = () => { const t = sentinelText(QTAGS[i]); if (notes.value.includes(t)) return; const end = sentinelLocale().startsWith('hi') ? '।' : '.'; notes.value = (notes.value.trim() ? notes.value.trim().replace(/[.;।]?$/, end + ' ') : '') + t + end; nCount(); });
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition; let rec = null;
   if (!SR) { dictBtn.disabled = true; dictBtn.title = 'Voice dictation is not supported in this browser. Try Chrome or Edge.'; }
   const dictUI = on => { dictBtn.classList.toggle('rec', on); dictBtn.innerHTML = on ? '⏹ Stop' : '🎙️ Dictate'; };
   function startDictation() {
     try {
-      rec = new SR(); rec.lang = 'en-IN'; rec.continuous = true; rec.interimResults = true;
+      rec = new SR(); rec.lang = sentinelLocale(); rec.continuous = true; rec.interimResults = true;
       const base = notes.value.trim(); let fin = '';
       rec.onresult = e => { let interim = ''; for (let i = e.resultIndex; i < e.results.length; i++) { const t = e.results[i][0].transcript.trim(); if (!t) continue; if (e.results[i].isFinal) fin += t.charAt(0).toUpperCase() + t.slice(1) + '. '; else interim += t + ' '; } notes.value = ((base ? base + ' ' : '') + fin + interim).slice(0, 1200); nCount(); };
       rec.onerror = e => { if (e.error !== 'aborted' && e.error !== 'no-speech') toast(e.error === 'not-allowed' ? 'Microphone permission was denied.' : 'Dictation stopped (' + e.error + ').', true); };
@@ -839,15 +859,15 @@ export function init(root, ctx) {
       const list = st.done.map(e => ({ id: `${pid}-${e.id}`, ts: now, mon: { id: monKey(e.mon), name: e.mon.name, loc: e.mon.location }, ll: COORD[e.mon.id] || parseGps(S.gps), level: e.r.level, mhi: e.r.mhi, primary: e.r.primary, ptype: e.r.ptype, types: e.r.types, n: e.r.n, status: e.r.level ? 'open' : 'resolved', insp: $('#insp').value.trim(), src: 'patrol', file: e.name }));
       idxAdd(list); toast(`${list.length} assessment${list.length === 1 ? '' : 's'} logged to the Command Centre`);
     };
-    $('#pPdf').onclick = () => {
+    $('#pPdf').onclick = async () => {
       const now = new Date(), id = `${patrolId()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-      const p = { id, tsText: now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) + ' IST', inspector: $('#insp').value.trim(), role: $('#role').value, gps: S.gps, sens: $('#sens').value,
+      const p = { id, ts: now.toISOString(), tsText: now.toLocaleString(sentinelLocale(), { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: !sentinelLocale().startsWith('hi') }) + ' IST', inspector: $('#insp').value.trim(), role: $('#role').value, gps: S.gps, sens: $('#sens').value,
         stats: { photos: st.done.length, crit: st.crit, med: st.med, low: st.low, clear: st.clear, avg: st.avg, avgBand: st.avg != null ? bandOf(st.avg)[1] : '' },
         sites: [...new Set(st.done.map(e => e.mon.name))],
         entries: order.filter(e => e.r && !e.r.error).map(e => ({ name: e.name, mon: e.mon.name, level: e.r.level, levelName: LEVELS[e.r.level].name, resp: LEVELS[e.r.level].resp, mhi: e.r.mhi, band: e.r.band, color: e.r.color, n: e.r.n, primary: e.r.primary, pos: e.r.pos, thumb: e.r.thumb })) };
-      let blob; try { blob = buildPatrolPDF(p); } catch (err) { console.error(err); toast('Could not build the patrol PDF.', true); return; }
-      const txt = [`Patrol summary ${p.id}`, `${p.stats.photos} photos · ${p.sites.join(', ')}`, `Critical ${p.stats.crit} · Medium ${p.stats.med} · Low ${p.stats.low} · Clear ${p.stats.clear} · Avg MHI ${p.stats.avg}`, ...p.entries.filter(e => e.level >= 2).map(e => `• L${e.level} ${e.mon}: ${e.primary} (${e.name})`), `Inspector: ${p.inspector || 'not given'} · ${p.tsText}`].join('\n');
-      showPdf(blob, `${p.id}_patrol-summary.pdf`, 'Patrol Inspection Summary', `${p.id} · ${p.stats.photos} photos · ${p.stats.crit} critical`, txt);
+      let blob; try { await PDF.ready(); blob = buildPatrolPDF(p); } catch (err) { console.error(err); toast('Could not build the patrol PDF.', true); return; }
+      if (!alive) return;
+      showPdf(blob, `${p.id}_patrol-summary.pdf`, 'Patrol Inspection Summary', `${p.id} · ${p.stats.photos} photos · ${p.stats.crit} critical`, patrolText(p), { kind: 'patrol', data: p });
     };
   }
 
@@ -900,7 +920,7 @@ export function init(root, ctx) {
     // table
     let rows = all.filter(e => (CC.status === 'all' || e.status === CC.status) && (CC.mon === 'all' || e.mon.id === CC.mon));
     const hist = store.get(HK, []), total = rows.length; rows = rows.slice(0, 80);
-    const fmtD = ts => new Date(ts).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+    const fmtD = ts => new Date(ts).toLocaleDateString(sentinelLocale(), { day: '2-digit', month: 'short', year: '2-digit' });
     $('#ccBody').innerHTML = `${demoN ? `<div class="demonote">✨ Showing ${demoN} demo entr${demoN === 1 ? 'y' : 'ies'} alongside your own data. <button class="lnk" id="ccDemo3">Remove demo data</button></div>` : ''}
       <div class="kpis">
         <div><small>Assessments logged</small><b>${all.length}</b><em>${sites.length} site${sites.length === 1 ? '' : 's'}</em></div>
@@ -961,9 +981,24 @@ export function init(root, ctx) {
   $('#ccDemo').onclick = toggleDemo;
   $('#ccCsv').onclick = () => {
     const a = idxLoad(); if (!a.length) { toast('Nothing to export yet.', true); return; }
-    const q = v => { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-    const head = ['reference', 'date_iso', 'monument', 'location', 'latitude', 'longitude', 'severity_level', 'severity_name', 'health_index', 'health_band', 'primary_defect', 'findings', 'defect_types', 'status', 'inspector', 'source'];
-    const lines = [head.join(',')].concat(a.map(e => [e.id, e.ts, e.mon.name, e.mon.loc, e.ll ? e.ll[0] : '', e.ll ? e.ll[1] : '', e.level, LEVELS[e.level].name, e.mhi, bandOf(e.mhi)[1], e.primary, e.n, Object.entries(e.types || {}).map(([t, n]) => `${t}:${n}`).join(' '), STATUS[e.status], e.insp, e.src].map(q).join(',')));
+    const q = value => {
+      let text = String(value == null ? '' : value);
+      // Spreadsheet software must treat user-entered names as text, not formulae.
+      if (/^\s*[=+@-]/.test(text)) text = "'" + text;
+      return '"' + text.replace(/"/g, '""') + '"';
+    };
+    const englishHeaders = ['reference', 'date_iso', 'date_local', 'monument', 'location', 'latitude', 'longitude', 'severity_level', 'severity_name', 'health_index', 'health_band', 'primary_defect', 'findings', 'defect_types', 'status', 'inspector', 'source'];
+    const hindiHeaders = ['संदर्भ', 'तारीख (ISO 8601)', 'स्थानीय तारीख और समय (भारत)', 'स्मारक', 'स्थान', 'अक्षांश', 'देशांतर', 'गंभीरता स्तर', 'गंभीरता', 'स्वास्थ्य सूचकांक', 'स्वास्थ्य श्रेणी', 'मुख्य क्षति', 'निष्कर्ष', 'क्षति के प्रकार', 'स्थिति', 'निरीक्षक', 'स्रोत'];
+    const head = window.MiravaI18n && window.MiravaI18n.language() === 'hi' ? hindiHeaders : englishHeaders;
+    const tr = sentinelText;
+    const sourceLabels = { demo: 'Demo data', patrol: 'Patrol', ticket: 'Ticket' };
+    const lines = [head.map(q).join(',')].concat(a.map(e => [
+      e.id, e.ts, new Date(e.ts).toLocaleString(sentinelLocale(), { timeZone: 'Asia/Kolkata' }),
+      tr(e.mon.name), tr(e.mon.loc), e.ll ? e.ll[0] : '', e.ll ? e.ll[1] : '',
+      e.level, tr(LEVELS[e.level].name), e.mhi, tr(bandOf(e.mhi)[1]), tr(e.primary), e.n,
+      Object.entries(e.types || {}).map(([type, n]) => `${tr(CV.TYPES[type] ? CV.TYPES[type].name : type)}: ${n}`).join('; '),
+      tr(STATUS[e.status]), e.insp, tr(sourceLabels[e.src] || e.src)
+    ].map(q).join(',')));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), u = URL.createObjectURL(blob), l = document.createElement('a');
     l.href = u; l.download = `sentinel-command-centre-${new Date().toISOString().slice(0, 10)}.csv`; root.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
   };
@@ -989,6 +1024,30 @@ export function init(root, ctx) {
   /* migrate tickets saved before the Command Centre existed */
   const migrate = () => { const a = idxLoad(), ids = new Set(a.map(e => e.id)), add = store.get(HK, []).filter(t => !ids.has(t.id)).map(t => idxEntry(t, 'ticket')); if (add.length) idxAdd(add); };
   updateCCBadge();
+
+  // Canvas annotations and open export previews are rendered assets; update them
+  // explicitly when the website language changes. Inspector notes stay literal.
+  let reportLanguageRevision = 0;
+  listen(window, 'mirava:languagechange', async () => {
+    const revision = ++reportLanguageRevision;
+    if (rec) stopDictation();
+    if (S.res && !S.busy) renderViewer();
+    const currentReport = S.cur;
+    if (!currentReport?.report || !$('#tModal').classList.contains('on')) return;
+    try {
+      await PDF.ready();
+      if (!alive || revision !== reportLanguageRevision || S.cur !== currentReport || !$('#tModal').classList.contains('on')) return;
+      const report = currentReport.report, data = datedReport(report.data);
+      if (report.kind === 'ticket') {
+        showPdf(buildTicketPDF(data), currentReport.fn, 'Monument Health Assessment Ticket', `${data.id} · ${data.monument.name} · Level ${data.level} ${data.levelName}${data.mhi != null ? ` · MHI ${data.mhi}` : ''}`, ticketText(data), report);
+      } else {
+        showPdf(buildPatrolPDF(data), currentReport.fn, 'Patrol Inspection Summary', `${data.id} · ${data.stats.photos} photos · ${data.stats.crit} critical`, patrolText(data), report);
+      }
+    } catch (_) { toast('Could not refresh the report language. Please open the report again.', true); }
+  });
+
+  /* AI monument & damage screening (vision model via the Mirava API) */
+  offs.push(initVision(root));
 
   /* ---------------- boot ---------------- */
   setMode('single'); renderHistory();

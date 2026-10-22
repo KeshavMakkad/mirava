@@ -2,11 +2,12 @@ import { Fragment, useEffect, useRef, useState, type RefObject } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
 import { AccountMenu } from '../../components/AccountMenu'
+import { LanguageToggle } from '../../components/LanguageToggle'
 import { PageScope } from '../../components/PageScope'
 import './landing.page.css'
 
 const MEMBERS = [
-  ['AP', 'Adirut Pandita', 'Team Leader & Project Coordination'],
+  ['AP', 'Adirut Pandita', 'Team Leader & Lead Developer'],
   ['BS', 'Baijayik Saha', 'Lead Developer & Technical Implementation'],
   ['PM', 'Priyanshi Malhotra', 'UI/UX Design & Interactive Mapping'],
   ['SS', 'Shambhavi Singh', 'Research & Heritage Content'],
@@ -195,6 +196,7 @@ export default function Landing() {
                 </>
               ) : (
                 <>
+                  <LanguageToggle />
                   <Link className="login ghost" to="/login">
                     Log in
                   </Link>
@@ -429,7 +431,15 @@ export default function Landing() {
           <div className="join reveal" id="experiences">
             <div>
               <div className="section-kicker">Join Mirava</div>
-              <h2>{signedIn ? `Welcome back, ${name || 'explorer'}.` : 'Your journey through India starts with one click.'}</h2>
+              <h2>
+                {signedIn ? (
+                  <>
+                    Welcome back, <span translate="no">{name || 'explorer'}</span>.
+                  </>
+                ) : (
+                  'Your journey through India starts with one click.'
+                )}
+              </h2>
             </div>
             <div className="join-actions">
               {signedIn ? (

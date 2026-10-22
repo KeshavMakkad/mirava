@@ -10,7 +10,7 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 /** True when one of the page's modals/lenses is open (keyboard shortcuts pause). */
 export function pageHasOpenOverlay(from: Element | null): boolean {
   const page = from?.closest('[data-page]')
-  return !!page?.querySelector('.modal.open, .news-modal.open, #museumLensV2.open, .explore-quiz-open')
+  return !!page?.querySelector('.modal.open, .news-modal.open, .cms-modal:not([hidden]), #museumLensV2.open, [data-quiz-open]')
 }
 
 function bestVoice(langCode: string): SpeechSynthesisVoice | null {

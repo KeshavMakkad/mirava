@@ -46,3 +46,18 @@
 .shivaji-boards {
   margin-top: 22px;
 }
+
+/* New nav layout: the shared AccountMenu takes the place of the legacy .account-area. */
+@media (max-width: 1199px) {
+  #top .top .explore-account { margin-left: auto; }
+}
+#top .top .explore-account { position: relative; z-index: 11; }
+
+/* Bhasha call-to-action that replaced the Lost Language Revival section (new explore.html moved it to Bhasha). */
+.bhasha-cta-card { position: relative; display: grid; gap: 18px; padding: clamp(28px, 4vw, 48px); border-radius: 26px; background: linear-gradient(145deg, #3a1d26, #1f1418); color: #f6ead8; box-shadow: 0 30px 70px rgba(44, 21, 27, .22); overflow: hidden; }
+.bhasha-cta-card::after { content: ''; position: absolute; width: 260px; height: 260px; right: -70px; top: -90px; border-radius: 50%; border: 1px solid rgba(241, 180, 60, .25); box-shadow: 0 0 0 30px rgba(241, 180, 60, .04), 0 0 0 64px rgba(241, 180, 60, .025); pointer-events: none; }
+.bhasha-cta-card .bhasha-glyphs { font: 500 clamp(44px, 6vw, 76px)/1 'Noto Sans Devanagari', 'Playfair Display', serif; color: #f1b43c; letter-spacing: .02em; }
+.bhasha-cta-card p { color: #d9c8bb; font-size: 14px; line-height: 1.8; max-width: 440px; }
+.bhasha-cta-card .pill { justify-self: start; display: inline-flex; align-items: center; gap: 18px; padding: 12px 12px 12px 24px; border-radius: 99px; background: #e4bd7b; color: #171a19; font: 700 12px Manrope, sans-serif; white-space: nowrap; }
+.bhasha-cta-card .pill b { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #1b2223; color: #f6ead8; }
+.bhasha-cta-card .pill:hover { transform: translateY(-3px); }

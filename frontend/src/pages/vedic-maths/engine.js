@@ -28,6 +28,17 @@ export function init(root, ctx) {
 
   const $ = s => root.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const I18N = () => window.MiravaI18n;
+  const tr = v => (I18N() ? I18N().t(v) : v);
+  const loc = () => (I18N() ? I18N().locale() : 'en-IN');
+  const origText = el => (I18N()?.originalText ? I18N().originalText(el) : el.textContent);
+  /* Sutra names are Sanskrit transliterations: keep them out of the translator. */
+  function renderSutraName(element, value) {
+    const parts = value.split(' · '), name = document.createElement('span');
+    name.lang = 'sa-Latn'; name.translate = false; name.textContent = parts.shift();
+    element.replaceChildren(name);
+    if (parts.length) { const detail = document.createElement('span'); detail.textContent = ' · ' + parts.join(' · '); element.append(detail); }
+  }
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const toast = msg => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, 2600); };
   // In-page anchors: scroll with the sticky-header offset the legacy page got from scroll-padding-top.
@@ -136,7 +147,7 @@ export function init(root, ctx) {
   function setMethod(k, vals, play) {
     L.key = k; const m = METHODS[k]; bus.dispatchEvent(new CustomEvent('ganita-method', { detail: k }));
     $('#mlist').querySelectorAll('.mbtn').forEach(b => { b.classList.toggle('on', b.dataset.k === k); b.setAttribute('aria-selected', b.dataset.k === k); });
-    $('#mName').textContent = m.name; $('#mDev').textContent = m.dev; $('#mDesc').textContent = m.desc;
+    renderSutraName($('#mName'), m.name); $('#mDev').textContent = m.dev; $('#mDesc').textContent = m.desc;
     const v = vals || m.fields.map(f => f[1]);
     $('#inrow').innerHTML = m.fields.map((f, i) => `${i ? `<span class="opsym">${m.op}</span>` : (m.fields.length === 1 && m.op !== '²' ? `<span class="opsym">${m.op}</span>` : '')}<div class="fld"><label for="in${i}">${esc(f[0])}</label><input class="in" id="in${i}" inputmode="numeric" autocomplete="off" value="${esc(v[i] || '')}" maxlength="13"></div>`).join('') + (m.op === '²' ? '<span class="opsym">²</span>' : '') + '<button class="btn gold" id="solveBtn" type="button">Solve ↵</button>';
     $('#exs').innerHTML = '<span class="k">Try:</span>' + m.ex.map((e, i) => `<button class="chip" data-e="${i}" type="button">${e.length === 2 ? `${e[0]} ${m.op} ${e[1]}` : m.op === '²' ? `${e[0]}²` : `${m.op}${e[0]}`}</button>`).join('');
@@ -184,11 +195,11 @@ export function init(root, ctx) {
     const nxt = () => { if (L.res !== r) return; s++; if (s >= r.steps.length) { stopPlay(); return; } show(s); L.timer = setTimeout(nxt, 1300); };
     L.timer = setTimeout(nxt, 1300);
   }
-  function speakable(t) { return t.replace(/×/g, ' times ').replace(/−/g, ' minus ').replace(/²/g, ' squared').replace(/³/g, ' cubed').replace(/∛/g, 'cube root of ').replace(/√/g, 'square root of ').replace(/\|/g, ', then ').replace(/→/g, ', giving ').replace(/Σ/g, 'sum'); }
+  function speakable(t) { const hi = I18N()?.language() === 'hi'; return t.replace(/×/g, hi ? ' गुणा ' : ' times ').replace(/−/g, hi ? ' घटा ' : ' minus ').replace(/²/g, hi ? ' का वर्ग' : ' squared').replace(/³/g, hi ? ' का घन' : ' cubed').replace(/∛/g, hi ? 'घनमूल ' : 'cube root of ').replace(/√/g, hi ? 'वर्गमूल ' : 'square root of ').replace(/\|/g, hi ? ', फिर ' : ', then ').replace(/→/g, hi ? ', जिससे मिलता है ' : ', giving ').replace(/Σ/g, hi ? 'योग' : 'sum'); }
   function say(r) {
     if (!('speechSynthesis' in window)) { toast('Read-aloud is not supported in this browser.'); return; }
     speechSynthesis.cancel();
-    r.steps.forEach(st => { const u = new SpeechSynthesisUtterance(speakable(`${st.k}. ${st.v}`)); u.lang = 'en-IN'; u.rate = 0.95; speechSynthesis.speak(u); });
+    r.steps.forEach(st => { const u = new SpeechSynthesisUtterance(speakable(tr(st.k) + '. ' + tr(st.v))); u.lang = loc(); u.rate = 0.95; speechSynthesis.speak(u); });
   }
 
   /* ---------------- hero demo ---------------- */
@@ -197,7 +208,7 @@ export function init(root, ctx) {
   let dI = 0, dS = 0, dT = 0;
   function demoTick() {
     const [k, a, q] = DEMOS[dI], r = VM.SOLVE[k](...a), m = METHODS[k];
-    $('#dK').textContent = m.name; $('#dQ').textContent = q; $('#dM').textContent = m.short.toLowerCase();
+    renderSutraName($('#dK'), m.name); $('#dQ').textContent = q; $('#dM').textContent = m.short.toLowerCase();
     $('#dVis').innerHTML = visualFor(r, dS);
     $('#dLine').textContent = dS >= r.steps.length - 1 ? r.line : r.steps[dS].v;
     $('#dDots').querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === dI));
@@ -210,10 +221,10 @@ export function init(root, ctx) {
 
   /* ---------------- sutra of the day ---------------- */
   { const d = new Date(), doy = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5), s = SUTRAS[doy % 16];
-    $('#sotd').innerHTML = `<span class="k" style="white-space:nowrap">Sutra of<br>the day</span><div><div class="dv">${s[1]}</div><small><b>${esc(s[2])}</b> · ${esc(s[3])}</small></div>`; }
+    $('#sotd').innerHTML = `<span class="k" style="white-space:nowrap">Sutra of<br>the day</span><div><div class="dv" lang="sa" translate="no">${s[1]}</div><small><b lang="sa-Latn" translate="no">${esc(s[2])}</b> · ${esc(s[3])}</small></div>`; }
 
   /* ---------------- sutra cards ---------------- */
-  $('#sgrid').innerHTML = SUTRAS.map(s => `<article class="sc" data-c="${s[4]}" data-lab="${s[6] ? 1 : 0}"><span class="n" aria-hidden="true">${s[0]}</span><div class="dv" lang="sa">${s[1]}</div><div class="ia">${esc(s[2])}</div><div class="mn">${esc(s[3])}</div><div class="ex">${esc(s[5])}</div><div class="ft"><span class="ar">${s[4] === 'arith' ? 'Arithmetic' : 'Algebra'}</span>${s[6] ? `<button class="try" data-m="${s[6]}" type="button">${s[6] === 'check' ? 'See it in the Lab ↗' : 'Try in Lab ↗'}</button>` : ''}</div></article>`).join('');
+  $('#sgrid').innerHTML = SUTRAS.map(s => `<article class="sc" data-c="${s[4]}" data-lab="${s[6] ? 1 : 0}"><span class="n" aria-hidden="true">${s[0]}</span><div class="dv" lang="sa" translate="no">${s[1]}</div><div class="ia" lang="sa-Latn" translate="no">${esc(s[2])}</div><div class="mn">${esc(s[3])}</div><div class="ex">${esc(s[5])}</div><div class="ft"><span class="ar">${s[4] === 'arith' ? 'Arithmetic' : 'Algebra'}</span>${s[6] ? `<button class="try" data-m="${s[6]}" type="button">${s[6] === 'check' ? 'See it in the Lab ↗' : 'Try in Lab ↗'}</button>` : ''}</div></article>`).join('');
   $('#sgrid').querySelectorAll('.try').forEach(b => b.onclick = () => { setMethod(b.dataset.m === 'check' ? 'urdhva' : b.dataset.m, null, true); go('lab'); if (b.dataset.m === 'check') toast('The green navasesh check under each answer is Guṇitasamuccayaḥ at work.'); });
   $('#sfilt').querySelectorAll('button').forEach(b => b.onclick = () => {
     $('#sfilt').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); const f = b.dataset.f;
@@ -280,7 +291,7 @@ export function init(root, ctx) {
     const tries = A.log.length, correct = A.log.filter(x => x.ok).length, acc = tries ? Math.round(correct / tries * 100) : 0;
     const avg = correct ? (A.log.filter(x => x.ok).reduce((t, x) => t + x.secs, 0) / correct).toFixed(1) : '—';
     const all = store.get(BK, {}), prev = all[bestKey()], isBest = !prev || A.score > prev.score;
-    if (isBest && tries) { all[bestKey()] = { score: A.score, correct, acc, date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) }; store.set(BK, all); }
+    if (isBest && tries) { all[bestKey()] = { score: A.score, correct, acc, date: new Date().toLocaleDateString(loc(), { day: '2-digit', month: 'short', year: 'numeric' }) }; store.set(BK, all); }
     if (tries) submit('vedic-sprint', { score: A.score, level: A.lv, time_taken_seconds: DUR, completed: true, meta: { mode: A.mode, correct, attempted: tries, accuracy: acc } });
     const per = A.score / A.lv, title = per >= 220 ? '🏅 Bhāskara-class mind' : per >= 140 ? '🎓 Ācārya (master)' : per >= 70 ? '🧮 Gaṇaka (reckoner)' : '📖 Śiṣya (student)';
     $('#cRes').innerHTML = `<div style="text-align:center"><span class="title">${title}</span><h3 style="margin-top:10px">${A.score} points${isBest && tries ? ' · new personal best!' : ''}</h3></div>
@@ -632,13 +643,16 @@ function openFactCard(obj) {
   }
   const chips = objectsRow.querySelectorAll('.object-chip');
   chips.forEach(function (chip) {
-    if (chip.textContent.indexOf(obj.label) !== -1) {
+    if (chip.dataset.objectId === obj.id) {
       chip.classList.add('collected');
       if (chip.textContent.indexOf('✅') === -1) chip.textContent = '✅ ' + obj.label;
     }
   });
   factTitle.textContent = obj.title;
-  factMeans.textContent = obj.means + (newlyCollected ? '  (New chronicle unlocked! +' + XP_PER_CARD + ' XP)' : '');
+  factMeans.replaceChildren(Object.assign(document.createElement('span'), { textContent: obj.means }));
+  if (newlyCollected) {
+    factMeans.append(document.createTextNode('  '), Object.assign(document.createElement('span'), { textContent: '(New chronicle unlocked! +' + XP_PER_CARD + ' XP)' }));
+  }
   factMatters.textContent = obj.matters;
   factCardCount.textContent = 'Chronicle ' + factCardCollection.length + ' / ' + TOTAL_CARDS;
   factModal.classList.remove('hidden');
@@ -825,7 +839,7 @@ function renderMap() {
       .replace('Reasoning Technique: ', '')
       .replace('Mixed Techniques: ', '')
       .replace('Boss Chamber: ', '')
-      .split('—')[0].split('.')[0].trim();
+      .split('—')[0].replace(/\s*\(e\.g\.[\s\S]*$/, '').split('.')[0].trim();
 
     const status = document.createElement('div');
     status.className = 'level-status';
@@ -1122,7 +1136,7 @@ function showSummaryScreen() {
       .replace('Vedic Technique: ', '')
       .replace('Reasoning Technique: ', '')
       .replace('Boss Chamber: ', '')
-      .split('—')[0].split('.')[0].trim();
+      .split('—')[0].replace(/\s*\(e\.g\.[\s\S]*$/, '').split('.')[0].trim();
 
     const starsEl = document.createElement('div');
     starsEl.className = 'lr-stars';
@@ -1345,10 +1359,10 @@ return { load: function () { loadProgress(); if (!mapScreen.classList.contains('
   /* Heist lesson -> Lab */
   const mapLesson = t => /nikhilam/i.test(t) ? 'nikhilam' : /ending in 5/i.test(t) ? 'ekadhika' : /boss/i.test(t) ? 'nikhilam' : null;
   const row = $('#labBridgeRow'), title = $('#lessonTitle');
-  const sync = () => { row.style.display = mapLesson(title.textContent) ? '' : 'none'; };
+  const sync = () => { row.style.display = mapLesson(origText(title)) ? '' : 'none'; };
   const mo = new MutationObserver(sync); mo.observe(title, { childList: true, characterData: true, subtree: true }); onCleanup(() => mo.disconnect()); sync();
   $('#lessonToggle').addEventListener('click', () => setTimeout(sync, 0));
-  $('#openInLabBtn').addEventListener('click', () => { const k = mapLesson(title.textContent); if (k) { GANITA.setMethod(k, null, true); go('lab'); } });
+  $('#openInLabBtn').addEventListener('click', () => { const k = mapLesson(origText(title)); if (k) { GANITA.setMethod(k, null, true); go('lab'); } });
   }
 
   /* ---- load saved progress from the account ---- */

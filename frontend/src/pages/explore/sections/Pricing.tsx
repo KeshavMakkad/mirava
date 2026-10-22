@@ -32,7 +32,6 @@ export function Pricing() {
         </div>
 
         <div className="mir-price-card featured">
-          <span className="mir-price-badge">Most Loved</span>
           <span className="p-tag">For deeper discovery</span>
           <h3>Heritage Plus</h3>
           <div className="mir-price-amount">

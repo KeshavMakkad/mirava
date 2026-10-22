@@ -11,11 +11,13 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     Numeric,
     String,
@@ -42,7 +44,12 @@ def _created_at() -> Mapped[datetime]:
 
 class Profile(Base):
     __tablename__ = "profiles"
-    __table_args__ = (CheckConstraint("role in ('tourist','student','teacher','admin')", name="profiles_role_check"),)
+    __table_args__ = (
+        CheckConstraint("role in ('tourist','student','teacher','admin')", name="profiles_role_check"),
+        CheckConstraint("preferred_language in ('en','hi')", name="profiles_language_check"),
+        CheckConstraint("avatar in ('lotus','fort','peacock','chakra','leaf','sun')", name="profiles_avatar_check"),
+        CheckConstraint("length(bio) <= 600 and length(location) <= 100", name="profiles_text_lengths"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     username: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
@@ -59,6 +66,11 @@ class Profile(Base):
     total_questions: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     total_correct: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     perfect_quizzes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    bio: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    location: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    preferred_language: Mapped[str] = mapped_column(Text, nullable=False, server_default="en")
+    # Profile symbol shown on the avatar button.
+    avatar: Mapped[str] = mapped_column(Text, nullable=False, server_default="lotus")
     created_at: Mapped[datetime] = _created_at()
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
@@ -223,6 +235,11 @@ class News(Base):
     category: Mapped[str] = mapped_column(Text, nullable=False, server_default="Heritage")
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     body: Mapped[str | None] = mapped_column(Text)
+    # Optional Hindi versions; the site falls back to English when empty.
+    title_hi: Mapped[str | None] = mapped_column(Text)
+    category_hi: Mapped[str | None] = mapped_column(Text)
+    summary_hi: Mapped[str | None] = mapped_column(Text)
+    body_hi: Mapped[str | None] = mapped_column(Text)
     image_url: Mapped[str | None] = mapped_column(Text)
     source_url: Mapped[str | None] = mapped_column(Text)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -230,3 +247,54 @@ class News(Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = _created_at()
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class Recipe(Base):
+    """A family recipe in a user's Rasoi Rescue vault. `id` is chosen by the
+    client (stable across edits); visibility 'shared' + consent publishes it."""
+
+    __tablename__ = "recipes"
+    __table_args__ = (
+        CheckConstraint("visibility in ('private','shared')", name="recipes_visibility_check"),
+        CheckConstraint("visibility = 'private' or consent", name="recipes_shared_needs_consent"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True)
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    shared_by: Mapped[str] = mapped_column(Text, nullable=False)
+    region: Mapped[str] = mapped_column(Text, nullable=False, server_default="Family kitchen")
+    category: Mapped[str] = mapped_column(Text, nullable=False, server_default="Main Course")
+    mins: Mapped[int | None] = mapped_column(Integer)
+    lang: Mapped[str] = mapped_column(Text, nullable=False, server_default="English")
+    ingredients: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    steps: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    tips: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    story: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    transcript: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    memory: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    visibility: Mapped[str] = mapped_column(Text, nullable=False, server_default="private")
+    consent: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = _created_at()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class RecipeMedia(Base):
+    """Photo/audio attached to a recipe; bytes live in a private Supabase Storage bucket."""
+
+    __tablename__ = "recipe_media"
+    __table_args__ = (
+        CheckConstraint("media_type in ('photo','audio')", name="recipe_media_type_check"),
+        ForeignKeyConstraint(["user_id", "recipe_id"], ["recipes.user_id", "recipes.id"], ondelete="CASCADE"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    recipe_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    media_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    media_type: Mapped[str] = mapped_column(Text, nullable=False)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    content_type: Mapped[str] = mapped_column(Text, nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = _created_at()

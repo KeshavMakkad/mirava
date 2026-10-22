@@ -9,9 +9,10 @@ Mirava started as a set of static HTML pages from a hackathon. It is now a full 
 | Auth + DB | Supabase (Auth + Postgres) | — |
 
 ```
-Browser ──(email/password · magic link · guest)──▶ Supabase Auth
+Browser ──(email/password · magic link · Google · guest)──▶ Supabase Auth
    │                                                   │ JWT
    └──── /api/* + Bearer <Supabase access token> ──▶ FastAPI ──▶ Supabase Postgres
+                                                       ├──▶ Supabase Storage (private recipe media)
                                                        └──▶ OpenRouter (AI, server-side key)
 ```
 
@@ -22,19 +23,30 @@ through Supabase's REST API.
 
 ## Features
 
-- **Explore**: the heritage atlas (Leaflet map), time travel, civilizations, festival calendar, language
-  revival, interactive museum and newsroom. The newsroom shows stories published from the admin console.
+- **English / हिंदी**: a site-wide language toggle. A translation runtime ([`frontend/src/i18n/`](frontend/src/i18n/))
+  translates the rendered page from a 10,700-entry dictionary (`frontend/public/locales/`). The choice is
+  remembered per browser and saved to the profile.
+- **Explore**: interactive 3D globe hero, the heritage atlas (Leaflet map), the Chronoscope time machine with a
+  "Then & Now" year comparator, civilizations, a 2026 festival calendar with verified dates, an interactive
+  museum, and a newsroom fed by the admin console (with optional Hindi versions of each story).
 - **Daily quiz**: 10 questions a day from a 1,000-question bank, the same set for everyone. Scoring is
   done on the server: answers are revealed only after you answer, and timing is measured by the server.
   Streaks, badges, XP, and daily and global leaderboards.
-- **Mini-apps**: Lost Legends of Bharat, Sentinel (monument health scanner), Rasoi Rescue, Vedic Maths /
-  The Ancient Heist, Bhāṣā (translator), JalParampara and Quiz Arena. Scores feed XP and the game leaderboards.
+- **Mini-apps**: Scores from all of these feed XP and the game leaderboards.
+  - **Lost Legends of Bharat**: an open-world game with martial-arts arenas, Trials and the 3D Monument Gallery (press **R**). A classic edition is also included.
+  - **Sentinel**: a monument health scanner with AI vision screening of photos.
+  - **Rasoi Rescue**: a 100-recipe heritage book. Each user has a private family-recipe vault with photos and voice notes, and can share recipes publicly. Every shared recipe passes an AI safety screen first.
+  - **Vedic Maths / The Ancient Heist**: includes daily habit drills.
+  - **Bhāṣā**: a translator with guided language lessons.
+  - **JalParampara**: includes a water-strategy mission.
+  - **Quiz Arena**: has its Hall of Scholars leaderboard.
 - **Classroom**: teachers create classes (join codes), browse the question bank, and assign homework to
   one student or a whole class (10 per day). Students join, take the homework, and review their answers.
 - **Admin console** (role `admin`): heritage news CMS, question manager, user roles, stats, and JSON
   export/import.
-- **Auth**: email + password (with confirmation and password reset), magic link, and guest mode. A
-  guest can upgrade to a full account and keep their progress.
+- **Auth**: email + password (with confirmation and password reset), magic link, Google, and guest mode.
+  A guest can upgrade to a full account and keep their progress.
+- **Profile**: a profile symbol, bio, location, preferred language, stats, badges and leaderboards.
 
 ## Setup
 
@@ -42,14 +54,18 @@ through Supabase's REST API.
 
 1. Create a project at [supabase.com](https://supabase.com).
 2. **Authentication → Sign In / Providers**: enable **Email** (keep "Confirm email" on) and
-   **Allow anonymous sign-ins** (needed for guest mode).
-3. **Authentication → URL Configuration**:
+   **Allow anonymous sign-ins** (needed for guest mode). For **Google**, create an OAuth client in Google
+   Cloud Console with the redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`, then paste its
+   client ID and secret into Supabase's Google provider.
+3. **Storage**: create a **private** bucket named `mirava-recipe-media` (for recipe photos and audio).
+4. **Authentication → URL Configuration**:
    - Site URL: `http://localhost:5173` (your production URL later)
    - Redirect URLs: `http://localhost:5173/**` (and the same for production). This covers
      `/auth/callback` (magic links, confirmations) and `/reset-password` (password reset, and the
      guest-upgrade step where a guest sets their password after verifying their email).
-4. Collect these values:
+5. Collect these values:
    - Project URL and **publishable key** (Project Settings → API Keys), for the frontend.
+   - **Secret key** (`sb_secret_…`, same page), for the backend. It's used only to read and write the private media bucket.
    - Database connection string, for the backend. Use the **Session pooler** or direct connection
      (Project Settings → Database). Change the scheme to `postgresql+psycopg://`.
 
@@ -59,7 +75,7 @@ through Supabase's REST API.
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-cp .env.example .env          # fill in DATABASE_URL, SUPABASE_URL, OPENROUTER_API_KEY
+cp .env.example .env          # DATABASE_URL, SUPABASE_URL, SUPABASE_SECRET_KEY, OPENROUTER_API_KEY
 alembic upgrade head          # creates tables, auth triggers, RLS; seeds badges + 1,000 questions
 uvicorn app.main:app --reload # http://localhost:8000/docs
 ```
@@ -71,6 +87,7 @@ Migrations live in [`backend/alembic/versions/`](backend/alembic/versions/):
   (email, magic link or guest), syncs the profile when a guest upgrades, adds the leaderboard view,
   indexes, and deny-all RLS
 - `0003`: seed badges and the question bank
+- `0004`: profile symbol, bio, location and language; Hindi news fields; the recipe vault and media tables
 
 After changing models, run `alembic revision --autogenerate -m "..."`. The `auth` schema is excluded
 from autogenerate.
@@ -92,6 +109,19 @@ npm run dev            # http://localhost:5173 (proxies /api → :8000)
 
 For production, set `VITE_API_URL` to the backend URL and add the frontend origin to the backend's
 `CORS_ORIGINS`.
+
+## Deploy
+
+The backend runs on **Render** using [`render.yaml`](render.yaml) and the Docker image. The container runs
+`alembic upgrade head` on start. The frontend runs on **Vercel** using [`frontend/vercel.json`](frontend/vercel.json).
+
+1. **Render** → New → Blueprint → pick this repo. Set the environment variables: `DATABASE_URL`,
+   `SUPABASE_SECRET_KEY`, `OPENROUTER_API_KEY`, and `CORS_ORIGINS` (a JSON list with your Vercel URL).
+2. **Vercel** → New Project → this repo, **Root Directory `frontend`**. Set `VITE_SUPABASE_URL`,
+   `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_API_URL` (the Render URL).
+3. **Supabase** → URL Configuration: add `https://<vercel-domain>/**` and set it as the Site URL.
+
+Render's free tier sleeps after 15 minutes idle, and the first request after that takes about 50 seconds.
 
 ## Tests
 
@@ -119,6 +149,8 @@ All endpoints are under `/api`. Interactive docs are at `/docs`.
 | Classroom | `POST/GET /classrooms`, `POST /classrooms/join`, `GET /questions`, `POST /classrooms/{id}/assignments`, `GET /assignments`, `POST /assignments/{id}/submit`, … |
 | News | `GET /news` |
 | Admin | `/admin/stats · news · questions · users` |
+| Rasoi | `GET/POST /rasoi/recipes`, `DELETE /rasoi/recipes/{id}`, `GET /rasoi/public`, `POST /rasoi/review`, `GET/PUT/DELETE /rasoi/recipes/{id}/media/{media_id}` |
+| Sentinel | `POST /sentinel/vision` (AI photo screening) |
 | AI | `POST /ai/chat` (OpenRouter proxy, rate-limited per user) |
 
 ## Security notes

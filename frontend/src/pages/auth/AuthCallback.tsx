@@ -6,8 +6,14 @@ import { urlAuthError } from './authUtils'
 
 const TIMEOUT_MS = 10_000
 
+/** Same-origin path from `?next=` (set by Google sign-in), else Explore. */
+function nextPath(): string {
+  const next = new URLSearchParams(window.location.search).get('next')
+  return next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/auth/') ? next : '/explore'
+}
+
 /**
- * Landing spot for magic-link, signup-confirmation and email-change links.
+ * Landing spot for magic-link, Google OAuth, signup-confirmation and email-change links.
  * supabase-js (PKCE + detectSessionInUrl) exchanges the `?code=` itself; we
  * just wait for the session to appear, then continue into the app.
  */
@@ -15,6 +21,7 @@ export default function AuthCallback() {
   const { session, loading, refreshMe } = useAuth()
   const navigate = useNavigate()
   const [urlError] = useState(urlAuthError)
+  const [next] = useState(nextPath)
   const [timedOut, setTimedOut] = useState(false)
 
   useEffect(() => {
@@ -27,8 +34,8 @@ export default function AuthCallback() {
     if (urlError || loading || !session) return
     // Email confirmation may have turned a guest into a full account.
     void refreshMe()
-    navigate('/explore', { replace: true })
-  }, [urlError, loading, session, navigate, refreshMe])
+    navigate(next, { replace: true })
+  }, [urlError, loading, session, navigate, refreshMe, next])
 
   const failed = urlError || (timedOut && !session)
 

@@ -35,6 +35,10 @@ class ProfileOut(BaseModel):
     total_questions: int
     total_correct: int
     perfect_quizzes: int
+    bio: str
+    location: str
+    preferred_language: str
+    avatar: str
     created_at: datetime
 
 
@@ -58,6 +62,10 @@ class ProfileUpdate(BaseModel):
     avatar_url: str | None = Field(default=None, max_length=500)
     # Users may switch between the self-service roles; admin is granted manually.
     role: Literal["tourist", "student", "teacher"] | None = None
+    bio: str | None = Field(default=None, max_length=600)
+    location: str | None = Field(default=None, max_length=100)
+    preferred_language: Literal["en", "hi"] | None = None
+    avatar: Literal["lotus", "fort", "peacock", "chakra", "leaf", "sun"] | None = None
 
     @field_validator("username")
     @classmethod
@@ -112,6 +120,14 @@ def update_me(body: ProfileUpdate, user: AuthUser, db: DB):
         profile.avatar_url = body.avatar_url or None
     if body.role is not None and profile.role != "admin":
         profile.role = body.role
+    if body.bio is not None:
+        profile.bio = body.bio.strip()
+    if body.location is not None:
+        profile.location = body.location.strip()
+    if body.preferred_language is not None:
+        profile.preferred_language = body.preferred_language
+    if body.avatar is not None:
+        profile.avatar = body.avatar
     db.commit()
     db.refresh(profile)
     return profile
@@ -147,7 +163,7 @@ def put_state(key: str, body: StateIn, user: AuthUser, db: DB) -> dict[str, Any]
     if body.value is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Use DELETE to clear a state key")
     if len(body.model_dump_json()) > MAX_STATE_BYTES:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "State value too large")
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "State value too large")
     stmt = insert(UserState).values(user_id=user.id, key=key, value=body.value)
     stmt = stmt.on_conflict_do_update(
         index_elements=[UserState.user_id, UserState.key],

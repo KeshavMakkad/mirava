@@ -37,7 +37,7 @@
 /* Layout */
 .fest-book-layout {
   display: grid;
-  grid-template-columns: 1fr minmax(340px, 430px);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 430px);
   gap: 34px;
   align-items: start;
 }
@@ -46,6 +46,7 @@
 .fest-book-wrap {
   position: relative;
   padding-top: 0;
+  min-width: 0;
 }
 
 /* Spiral binding */
@@ -253,7 +254,7 @@
 /* Day grid */
 .day-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 5px;
   margin-bottom: 22px;
 }
@@ -640,7 +641,7 @@
 
 /* ---------- RESPONSIVE ---------- */
 @media (max-width: 1100px) {
-  .fest-book-layout { grid-template-columns: 1fr; }
+  .fest-book-layout { grid-template-columns: minmax(0, 1fr); }
   .fest-book-detail { position: relative; top: auto; }
 }
 @media (max-width: 900px) {

@@ -22,6 +22,11 @@ class NewsIn(BaseModel):
     category: str = Field(default="Heritage", max_length=40)
     summary: str = Field(min_length=1, max_length=600)
     body: str | None = Field(default=None, max_length=20_000)
+    # Optional Hindi versions (shown when the site is in Hindi; English is the fallback).
+    title_hi: str | None = Field(default=None, max_length=200)
+    category_hi: str | None = Field(default=None, max_length=40)
+    summary_hi: str | None = Field(default=None, max_length=600)
+    body_hi: str | None = Field(default=None, max_length=20_000)
     image_url: HttpUrl | None = None
     source_url: HttpUrl | None = None
     published_at: datetime | None = None
@@ -36,6 +41,10 @@ class NewsOut(BaseModel):
     category: str
     summary: str
     body: str | None
+    title_hi: str | None
+    category_hi: str | None
+    summary_hi: str | None
+    body_hi: str | None
     image_url: str | None
     source_url: str | None
     published_at: datetime
@@ -48,6 +57,8 @@ def _news_values(body: NewsIn) -> dict:
     data["image_url"] = str(body.image_url) if body.image_url else None
     data["source_url"] = str(body.source_url) if body.source_url else None
     data["published_at"] = body.published_at or datetime.now(UTC)
+    for k in ("title_hi", "category_hi", "summary_hi", "body_hi"):
+        data[k] = (data[k] or "").strip() or None
     return data
 
 

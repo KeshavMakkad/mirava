@@ -638,3 +638,184 @@ a {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ===== 2026 profile: symbol, location, bio, preferred language ===== */
+.pf-avatar svg {
+  width: 58px;
+  height: 58px;
+}
+.pf-location {
+  margin-top: 6px;
+  font: 600 13px 'Manrope', sans-serif;
+  color: #f1d8ad;
+  overflow-wrap: anywhere;
+}
+.pf-bio {
+  margin: 10px 0 0;
+  max-width: 46ch;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #ead8bd;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.pf-edit {
+  margin-bottom: 18px;
+}
+.pf-intro {
+  margin: -6px 0 18px;
+}
+.pf-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.pf-help {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.pf-label-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.pf-count {
+  font-style: normal;
+  letter-spacing: 0.04em;
+}
+.pf-field textarea,
+.pf-lang-block select {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(238, 163, 17, 0.35);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  font: 500 14.5px/1.6 'Manrope', sans-serif;
+  outline: none;
+  resize: vertical;
+  transition: 0.2s;
+}
+.pf-field textarea:focus,
+.pf-lang-block select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 4px rgba(241, 180, 60, 0.12);
+}
+.pf-symbol-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.pf-symbol {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 12px 6px 10px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(238, 163, 17, 0.3);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--wine);
+  font: 700 11.5px 'Manrope', sans-serif;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.pf-symbol svg {
+  width: 38px;
+  height: 38px;
+}
+.pf-symbol:hover {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+.pf-symbol.on {
+  background: var(--wine-deep);
+  border-color: var(--wine-deep);
+  color: #f6d48a;
+  box-shadow: 0 10px 24px rgba(85, 35, 47, 0.25);
+}
+.pf-symbol.on span {
+  color: #fff8ee;
+}
+.pf-symbol:focus-visible {
+  outline: 3px solid rgba(241, 180, 60, 0.6);
+  outline-offset: 2px;
+}
+.pf-symbols:disabled .pf-symbol {
+  cursor: progress;
+  opacity: 0.7;
+}
+.pf-lang-block {
+  display: grid;
+  grid-template-columns: 1fr minmax(160px, 220px);
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(241, 180, 60, 0.1);
+  border: 1px solid var(--gline);
+}
+.pf-lang-block label {
+  font: 700 15px 'Playfair Display', serif;
+}
+.pf-lang-block p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.pf-save-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--gline);
+}
+.pf-save-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pf-status {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pf-status-ok {
+  color: var(--green);
+}
+.pf-status-error {
+  color: var(--red);
+}
+.pf-discover {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.pf-discover-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--gold);
+  color: var(--wine-deep);
+  font-weight: 800;
+}
+.pf-discover .pf-btn {
+  margin-top: 10px;
+}
+@media (max-width: 760px) {
+  .pf-symbol-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pf-two,
+  .pf-lang-block {
+    grid-template-columns: 1fr;
+  }
+}

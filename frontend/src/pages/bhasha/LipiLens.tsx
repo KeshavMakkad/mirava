@@ -26,8 +26,8 @@ export function LipiLens({ active, text, setText, ancient, setAncient, openStudi
             Lipi Lens: <em>one text, seventeen scripts</em>
           </h2>
           <p>
-            Type in any Indian script or in Roman letters. Use IAST for exact spellings, e.g. <i>kṛṣṇa</i>; plain spellings
-            like <i>Priya Sharma</i> work too. Every script updates live. Tap a card to carve it on stone, palm leaf or copper
+            Type in any Indian script or in Roman letters. Use IAST for exact spellings, e.g. <i translate="no">kṛṣṇa</i>; plain spellings
+            like <i translate="no">Priya Sharma</i> work too. Every script updates live. Tap a card to carve it on stone, palm leaf or copper
             plate.
           </p>
         </div>
@@ -36,7 +36,7 @@ export function LipiLens({ active, text, setText, ancient, setAncient, openStudi
       <div className="lp-tools">
         <div className="chips">
           {LP_EX.map((e) => (
-            <button key={e} type="button" className="chip ind" onClick={() => setText(e)}>
+            <button key={e} type="button" className="chip ind" translate="no" onClick={() => setText(e)}>
               {e}
             </button>
           ))}
@@ -76,6 +76,7 @@ export function LipiLens({ active, text, setText, ancient, setAncient, openStudi
               </div>
               <div
                 className="tx"
+                translate="no"
                 dir={info.rtl ? 'rtl' : undefined}
                 style={s === 'iast' ? { fontFamily: "'Noto Serif',Georgia,serif", fontStyle: 'italic', fontSize: 22 } : undefined}
               >

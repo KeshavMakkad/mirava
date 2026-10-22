@@ -12,6 +12,8 @@ import { useAuth } from '../../auth/AuthProvider'
 import { AccountMenu } from '../../components/AccountMenu'
 import { LeaderboardPanel } from '../../components/leaderboard/LeaderboardPanel'
 import { PageScope } from '../../components/PageScope'
+import { tr } from '../../components/quiz/tr'
+import { useLanguage } from '../../i18n'
 import { useLegacyPage, type LegacyInit } from '../../lib/legacy'
 import { initArena } from './arena.js'
 import './arena.page.css'
@@ -26,6 +28,7 @@ const NAV = [
 
 function Arena() {
   const { me, isGuest, refreshMe } = useAuth()
+  useLanguage()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -86,32 +89,28 @@ function Arena() {
           <div className="wrap">
             <div className="sec" style={{ marginTop: 0 }}>
               <div>
-                <div className="k">Leaderboard</div>
+                <div className="k">Community leaderboard</div>
                 <h2 style={{ fontSize: 36 }}>Hall of Scholars</h2>
                 <p className="qa-board-note">
-                  Mirava players ranked by their best Quiz Arena run, and across every Mirava game by total XP.
-                  {isGuest && (
-                    <>
-                      {' '}
-                      Guests aren't ranked —{' '}
-                      <Link to="/signup" state={{ upgrade: true }}>
-                        create an account
-                      </Link>{' '}
-                      to join the board.
-                    </>
+                  {tr(
+                    'Saved across devices and ranked by each scholar’s best Quiz Arena run. Sign in to appear here.',
+                    'सभी डिवाइसों पर सहेजा गया और हर विद्वान के सर्वश्रेष्ठ प्रश्नोत्तरी मंच खेल के आधार पर क्रमबद्ध। यहाँ दिखने के लिए साइन इन करें।',
                   )}
                 </p>
+                {isGuest && (
+                  <p className="qa-guest qa-board-guest">
+                    {tr(
+                      'Guests can play, but only signed-in players publish XP to the Hall of Scholars.',
+                      'अतिथि खेल सकते हैं, लेकिन केवल साइन-इन खिलाड़ी ही विद्वानों की सभा में अनुभव अंक प्रकाशित करते हैं।',
+                    )}{' '}
+                    <Link to="/signup" state={{ upgrade: true }}>
+                      Create an account
+                    </Link>
+                  </p>
+                )}
               </div>
             </div>
-            <div className="qa-board-grid">
-              <LeaderboardPanel boards={['quiz-arena', 'global']} theme="light" limit={50} />
-              <div>
-                <div className="k" style={{ marginBottom: 10 }}>
-                  AI rivals · benchmarks to climb past
-                </div>
-                <div id="boardRivals" />
-              </div>
-            </div>
+            <LeaderboardPanel boards={['quiz-arena']} theme="light" variant="scholars" limit={50} />
           </div>
         </section>
       </main>

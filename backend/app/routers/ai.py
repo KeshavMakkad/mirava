@@ -57,45 +57,65 @@ class ChatOut(BaseModel):
     reply: str
 
 
-def _rate_limit(user_key: str) -> None:
-    limit = get_settings().ai_requests_per_minute
+def rate_limit(key: str, limit: int | None = None, window: float = 60) -> None:
+    """In-memory sliding-window limiter (per process)."""
+    limit = limit or get_settings().ai_requests_per_minute
     now = time.monotonic()
-    q = _calls[user_key]
-    while q and now - q[0] > 60:
+    q = _calls[key]
+    while q and now - q[0] > window:
         q.popleft()
     if len(q) >= limit:
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many AI requests — try again in a minute")
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many AI requests — try again later")
     q.append(now)
 
 
-@router.post("/chat", response_model=ChatOut)
-async def chat(body: ChatIn, user: AuthUser) -> ChatOut:
-    settings = get_settings()
-    if not settings.openrouter_api_key:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "AI is not configured on this server")
-    _rate_limit(str(user.id))
+def require_ai(message: str = "AI is not configured on this server") -> str:
+    key = get_settings().openrouter_api_key
+    if not key:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, message)
+    return key
 
-    system = PERSONAS[body.persona] + (f"\n\n{body.system}" if body.system else "")
-    payload = {
-        "model": settings.openrouter_model,
-        "max_tokens": body.max_tokens,
-        "temperature": 0.7,
-        "messages": [{"role": "system", "content": system}, *[m.model_dump() for m in body.messages]],
+
+async def openrouter_chat(messages: list[dict], *, model: str | None = None, max_tokens: int = 400,
+                          temperature: float = 0.7, timeout: float = 30, json_mode: bool = False) -> str:
+    """Call OpenRouter and return the first reply's text. Raises 503/502 HTTPExceptions."""
+    settings = get_settings()
+    key = require_ai()
+    payload: dict = {
+        "model": model or settings.openrouter_model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": messages,
     }
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
     headers = {
-        "Authorization": f"Bearer {settings.openrouter_api_key}",
+        "Authorization": f"Bearer {key}",
         "HTTP-Referer": settings.cors_origins[0] if settings.cors_origins else "https://mirava.in",
         "X-Title": "Mirava",
     }
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             res = await client.post(OPENROUTER_URL, json=payload, headers=headers)
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The AI provider timed out") from exc
     except httpx.HTTPError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Could not reach the AI provider") from exc
     if res.status_code != 200:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"AI provider error ({res.status_code})")
     try:
-        reply = res.json()["choices"][0]["message"]["content"] or ""
+        return (res.json()["choices"][0]["message"]["content"] or "").strip()
     except (KeyError, IndexError, ValueError) as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Unexpected AI response") from exc
-    return ChatOut(reply=reply.strip())
+
+
+@router.post("/chat", response_model=ChatOut)
+async def chat(body: ChatIn, user: AuthUser) -> ChatOut:
+    require_ai()
+    rate_limit(f"chat:{user.id}")
+    system = PERSONAS[body.persona] + (f"\n\n{body.system}" if body.system else "")
+    reply = await openrouter_chat(
+        [{"role": "system", "content": system}, *[m.model_dump() for m in body.messages]],
+        max_tokens=body.max_tokens,
+    )
+    return ChatOut(reply=reply)

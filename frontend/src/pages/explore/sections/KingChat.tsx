@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { getLanguage, t } from '../../../i18n'
 import { api, ApiError, type ChatMessage } from '../../../lib/api'
 import { KINGS, type King } from '../data/kings'
 
@@ -92,7 +93,8 @@ export function KingChat() {
 
   const pickKing = (k: King) => {
     setKing(k)
-    setLang('english')
+    // New explore.html: Hindi site mode defaults the conversation to Hindi.
+    setLang(getLanguage() === 'hi' ? 'hindi' : 'english')
     setScreen('lang')
   }
 
@@ -106,7 +108,7 @@ export function KingChat() {
       greeting = `Greetings, traveler. I am ${king.name}. ${king.desc} Speak freely — I shall answer in English.`
     } else if (choice === 'hindi') {
       label = 'हिंदी'
-      greeting = `नमस्ते, यात्री। मैं ${king.name} हूँ। ${king.desc} आप निःसंकोच बोलिए — मैं हिंदी में उत्तर दूँगा।`
+      greeting = `नमस्ते, यात्री। यह ${t(king.name)} का शैक्षिक संवाद है। ${t(king.desc)} आप निःसंकोच बोलिए — मैं हिंदी में उत्तर दूँगा।`
     } else {
       label = king.language
       greeting = REGIONAL_GREETINGS[king.id] || `नमस्ते, यात्री. मैं ${king.name} हूँ. बोलिए.`
@@ -265,7 +267,11 @@ export function KingChat() {
             </div>
             <div id="kingMessages">
               {messages.map((m) => (
-                <div key={m.id} className={`king-msg ${m.type}`}>
+                <div
+                  key={m.id}
+                  className={`king-msg ${m.type}`}
+                  translate={m.type === 'user' || m.pending ? 'no' : undefined}
+                >
                   {m.text}
                 </div>
               ))}

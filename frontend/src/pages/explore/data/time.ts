@@ -14,19 +14,8 @@ export const ERAS: Record<string, Era> = {
         { label: 'TAKEAWAY',    text: 'History is not only kings and battles — it is people changing how they understand life.' }
       ]
     },
-    '120': {
+    '-250': {
       number: '02',
-      title: 'Trade Across the Seas',
-      captionLabel: 'THE INDIAN OCEAN AS HIGHWAY',
-      caption: 'Ports turn the Indian Ocean into a busy highway for goods, ideas, scripts and stories moving between continents.',
-      cards: [
-        { label: 'THE PORTS', text: 'Arikamedu, Muziris and other coastal centres connect South Asia with distant markets.' },
-        { label: 'THE CARGO', text: 'Spices, beads, textiles, ceramics and stories travel alongside merchants and sailors.' },
-        { label: 'TAKEAWAY',  text: 'Heritage is also a history of movement — across water, languages and borders.' }
-      ]
-    },
-    '250': {
-      number: '03',
       title: 'The Mauryan Conversation',
       captionLabel: 'AN EMPIRE LEAVES MESSAGES IN STONE',
       caption: 'Mauryan power connects a vast territory through administration, roads and public inscriptions.',
@@ -34,6 +23,17 @@ export const ERAS: Record<string, Era> = {
         { label: 'THE EMPIRE', text: 'Administration, roads and political networks connect a huge territory.' },
         { label: 'THE CLUE',   text: 'Ashokan inscriptions turn public spaces into places where people meet ideas about dhamma.' },
         { label: 'TAKEAWAY',   text: 'Inscriptions are history speaking directly through surviving evidence.' }
+      ]
+    },
+    '120': {
+      number: '03',
+      title: 'Trade Across the Seas',
+      captionLabel: 'THE INDIAN OCEAN AS HIGHWAY',
+      caption: 'Ports turn the Indian Ocean into a busy highway for goods, ideas, scripts and stories moving between continents.',
+      cards: [
+        { label: 'THE PORTS', text: 'Arikamedu, Muziris and other coastal centres connect South Asia with distant markets.' },
+        { label: 'THE CARGO', text: 'Spices, beads, textiles, ceramics and stories travel alongside merchants and sailors.' },
+        { label: 'TAKEAWAY',  text: 'Heritage is also a history of movement — across water, languages and borders.' }
       ]
     },
     '450': {
@@ -126,4 +126,5 @@ export const ERAS: Record<string, Era> = {
     }
   }
 
-export const ERA_ORDER = ['-500', '120', '250', '450', '800', '1200', '1400', '1650', '1857', '1947', '2025']
+// Chronological (the new explore.html fixed 250 CE → 250 BCE for the Mauryan era).
+export const ERA_ORDER = ['-500', '-250', '120', '450', '800', '1200', '1400', '1650', '1857', '1947', '2025']

@@ -282,7 +282,6 @@ footer a{color:var(--gold-t)}
 .qa-loading i{width:34px;height:34px;border-radius:50%;border:3px solid rgba(238,163,17,.25);border-top-color:var(--gold);animation:qa-spin .8s linear infinite}
 .qa-board-note{color:var(--dim);font-size:13.5px;margin-top:6px;line-height:1.6;max-width:640px}
 .qa-board-note a{color:var(--gold-t);font-weight:700;text-decoration:underline}
-.qa-board-grid{display:grid;grid-template-columns:1.4fr .8fr;gap:18px;align-items:start}
-@media(max-width:860px){.qa-board-grid{grid-template-columns:1fr}}
+.qa-board-guest{margin:12px 0 0;max-width:640px}
 .qa-guest{margin:0 0 16px;padding:10px 14px;border-radius:14px;background:rgba(241,180,60,.12);border:1px solid rgba(238,163,17,.4);font-size:13px;color:#705834;line-height:1.55}
 .qa-guest a{color:var(--gold-t);font-weight:800;text-decoration:underline}

@@ -21,6 +21,7 @@ os.environ["DATABASE_URL"] = TEST_DB or "postgresql+psycopg://unused@localhost/u
 os.environ["SUPABASE_URL"] = "http://localhost:54321"
 os.environ["SUPABASE_JWT_SECRET"] = JWT_SECRET
 os.environ["OPENROUTER_API_KEY"] = ""
+os.environ["SUPABASE_SECRET_KEY"] = ""  # never touch real Storage from tests
 
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402

@@ -1,10 +1,13 @@
 import { useRef, useState } from 'react'
 import { PageScope } from '../../components/PageScope'
 import { DailyQuizModal } from '../../components/quiz/DailyQuizModal'
-// Stylesheets in legacy document order (base <head> styles → Leaflet → sections → late patches).
+// Stylesheets in source document order (base <head> styles → spatial edition → Leaflet → sections → late patches).
 import './base.page.css'
+import './live.page.css'
+import './spatial.page.css'
 import 'leaflet/dist/leaflet.css'
 import './time.page.css'
+import './compare.page.css'
 import './civilizations.page.css'
 import './festivals.page.css'
 import './languages.page.css'
@@ -13,6 +16,7 @@ import './pricing.page.css'
 import './newsroom.page.css'
 import './late.page.css'
 import './additions.page.css'
+import './journey.page.css'
 import { Atlas } from './sections/Atlas'
 import { Civilizations } from './sections/Civilizations'
 import { Festivals } from './sections/Festivals'
@@ -37,13 +41,13 @@ export default function ExplorePage() {
 
   return (
     <PageScope name="explore" title="Mirava Atlas — India, in every era">
-      <div ref={rootRef} className={quizOpen ? 'explore-quiz-open' : undefined}>
-        <div className="noise"></div>
-        <div id="miravaScrollProgress" aria-hidden="true"></div>
-        <div id="miravaCursorGlow" aria-hidden="true"></div>
-        <button id="miravaBackTop" type="button" aria-label="Back to top" title="Back to top">
-          ↑
-        </button>
+      {/* className stays static: the page effects add classes to this element. */}
+      <div ref={rootRef} className="explore-root" data-quiz-open={quizOpen || undefined}>
+        <a className="mirava-skip" href="#atlas">
+          Skip to the atlas
+        </a>
+        <div id="miravaReadProgress" aria-hidden="true"></div>
+        <div className="noise" aria-hidden="true"></div>
 
         <Hero onOpenQuiz={() => setQuizOpen(true)} onOpenShivaji={() => setShivajiOpen(true)} />
         <Atlas />

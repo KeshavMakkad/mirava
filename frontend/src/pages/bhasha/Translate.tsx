@@ -395,15 +395,19 @@ export function Translate({ active, aiOn, onAiUnavailable, request, toast, speak
             {out.kind === 'err' && <div className="notice err">⚠️ {out.msg}</div>}
             {out.kind === 'res' && lastOut && (
               <>
-                <div className="txt" dir={L(lastOut.dl).rtl ? 'rtl' : undefined}>
+                <div className="txt" translate="no" dir={L(lastOut.dl).rtl ? 'rtl' : undefined}>
                   {shown}
                 </div>
-                {lastOut.roman && <div className="rom">{lastOut.roman}</div>}
+                {lastOut.roman && (
+                  <div className="rom" translate="no">
+                    {lastOut.roman}
+                  </div>
+                )}
                 {lastOut.words && lastOut.words.length > 0 && (
                   <div className="words">
                     {lastOut.words.slice(0, 24).map((w, i) => (
                       <span key={i}>
-                        <b>{shownWord(w.src)}</b>
+                        <b translate="no">{shownWord(w.src)}</b>
                         <small>{w.gloss || ''}</small>
                       </span>
                     ))}
@@ -411,7 +415,10 @@ export function Translate({ active, aiOn, onAiUnavailable, request, toast, speak
                 )}
                 {lastOut.pivot && (
                   <div className="pivot">
-                    Sanskrit pivot: <b className="ind">{lastOut.pivot}</b>
+                    Sanskrit pivot:{' '}
+                    <b className="ind" lang="sa" translate="no">
+                      {lastOut.pivot}
+                    </b>
                     <br />
                     ⚠️ A rule-based reconstruction: each Sanskrit word is put through Pali / Mahārāṣṭrī sound laws. Grammar
                     endings are not re-inflected. Sign in to use Mirava AI for scholarly translation.
@@ -468,6 +475,7 @@ export function Translate({ active, aiOn, onAiUnavailable, request, toast, speak
             key={p}
             type="button"
             className="chip"
+            translate="no"
             onClick={() => {
               setVals({ sl: 'en', src: p })
               void translate()
@@ -502,11 +510,11 @@ export function Translate({ active, aiOn, onAiUnavailable, request, toast, speak
               >
                 <div>
                   <small>{L(x.sl)?.n || x.sl}</small>
-                  {x.s}
+                  <span translate="no">{x.s}</span>
                 </div>
                 <div>
                   <small>{L(x.dl)?.n || x.dl}</small>
-                  {x.t}
+                  <span translate="no">{x.t}</span>
                 </div>
                 <span className="k">↺</span>
               </div>

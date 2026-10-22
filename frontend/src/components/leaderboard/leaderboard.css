@@ -217,3 +217,87 @@
     font-size: 13px;
   }
 }
+
+/* ---- Hall of Scholars variant (Quiz Arena) — mirrors the arena's .lb/.lbr cards ---- */
+.lb-root .lb-sch {
+  display: grid;
+  gap: 8px;
+}
+.lb-root .lb-sch-row {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+  background: linear-gradient(160deg, #f4ebe0, #fffaf3);
+  border: 1.5px solid rgba(238, 163, 17, 0.224);
+  border-radius: 20px;
+  box-shadow: 0 18px 50px rgba(80, 40, 20, 0.08);
+  color: #24151a;
+}
+.lb-root.lb-dark .lb-sch-row {
+  background: var(--lb-bg);
+  border-color: var(--lb-border);
+  color: var(--lb-text);
+}
+.lb-root .lb-sch-row.lb-me {
+  border-color: #f1b43c;
+  box-shadow: 0 0 30px rgba(241, 180, 60, 0.12);
+}
+.lb-root .lb-sch-rk {
+  font: 800 22px 'Playfair Display', serif;
+  color: var(--lb-muted);
+  text-align: center;
+}
+.lb-root .lb-sch-who {
+  min-width: 0;
+}
+.lb-root .lb-sch-who b {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.lb-root .lb-sch-who small {
+  display: block;
+  font-size: 11px;
+  color: var(--lb-muted);
+  margin-top: 2px;
+}
+.lb-root .lb-sch-tag {
+  font: 600 9px 'DM Mono', monospace;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 99px;
+  margin-left: 6px;
+  background: rgba(241, 180, 60, 0.18);
+  color: var(--lb-gold);
+  vertical-align: middle;
+}
+.lb-root .lb-sch-xp {
+  font: 700 14px 'DM Mono', monospace;
+  color: var(--lb-gold);
+  white-space: nowrap;
+}
+.lb-root .lb-sch-empty {
+  padding: 22px;
+  background: linear-gradient(160deg, #f4ebe0, #fffaf3);
+  border: 1.5px solid rgba(238, 163, 17, 0.224);
+  border-radius: 20px;
+  color: var(--lb-empty);
+  font-size: 14px;
+}
+.lb-root.lb-dark .lb-sch-empty {
+  background: var(--lb-bg);
+}
+html[lang='hi'] .lb-root :is(.lb-title, .lb-sch-rk) {
+  font-family: 'Mirava Devanagari', 'Noto Sans Devanagari', 'Playfair Display', serif;
+}
+html[lang='hi'] .lb-root :is(.lb-sub, .lb-gap, .lb-row.lb-header, .lb-sch-tag) {
+  letter-spacing: 0;
+}
+@media (max-width: 520px) {
+  .lb-root .lb-sch-row {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 12px;
+  }
+}

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
 import { AccountMenu } from '../../components/AccountMenu'
 import { PageScope } from '../../components/PageScope'
+import { locale, useLanguage } from '../../i18n'
 import { api } from '../../lib/api'
 import { BackupPanel } from './BackupPanel'
 import { NewsPanel } from './NewsPanel'
@@ -15,7 +16,7 @@ import './admin.page.css'
 type Tab = 'news' | 'quiz' | 'users' | 'settings'
 
 const TABS: [Tab, string][] = [
-  ['news', 'Heritage News'],
+  ['news', 'News & stories'],
   ['quiz', 'Quiz Manager'],
   ['users', 'Users'],
   ['settings', 'Publishing / Backup'],
@@ -49,6 +50,7 @@ function useToast() {
 
 export default function AdminPage() {
   const { me, user } = useAuth()
+  useLanguage()
   const [tab, setTab] = useState<Tab>('news')
   const { msg, show, toast } = useToast()
   const [exporting, setExporting] = useState(false)
@@ -69,20 +71,19 @@ export default function AdminPage() {
   const metric = (key: string) => {
     const v = stats.data?.[key]
     if (key === 'last_news_at') return fmtDate(v as string | null)
-    return typeof v === 'number' ? v.toLocaleString('en-IN') : '—'
+    return typeof v === 'number' ? v.toLocaleString(locale()) : '—'
   }
 
   return (
-    <PageScope name="admin" title="MIRAVA — Administrator Console">
+    <PageScope name="admin" title="MIRAVA | Heritage Studio">
       <header className="top">
-        <div className="brand">
-          mira<i>va</i> / admin
-        </div>
+        <Link className="brand" to="/explore">
+          mira<i>va</i> <span className="brand-sub">/ STUDIO</span>
+        </Link>
         <div className="top-actions">
-          <Link to="/explore">View Explore ↗</Link>
-          <button type="button" onClick={exportContent} disabled={exporting}>
-            {exporting ? 'Exporting…' : 'Export content'}
-          </button>
+          <Link className="back" to="/explore">
+            ← Back to Explorer
+          </Link>
           <AccountMenu />
         </div>
       </header>
@@ -90,27 +91,44 @@ export default function AdminPage() {
       <main className="shell">
         <section className="hero">
           <div>
-            <div className="eyebrow">Restricted publishing console</div>
-            <h1>
-              Shape what MIRAVA
-              <br />
-              <em>shows next.</em>
+            <div className="eyebrow">HERITAGE STUDIO / ENGLISH + HINDI</div>
+            <h1 className="heading">
+              Shape the <em>story.</em>
             </h1>
-            <p>
-              Publish heritage news and curated quiz questions, and manage who can teach or administer. Changes are
-              saved to the MIRAVA database and are immediately available to every visitor on <b>Explore</b>.
+            <p className="intro">
+              Publish stories and quiz questions in English and Hindi. Readers see the version that matches their chosen
+              language, and your edits are shared across every device.
             </p>
-          </div>
-          <div className="status-card">
-            <small>Current session</small>
-            <b>{me?.profile.display_name || me?.profile.username || 'Administrator'}</b>
-            <small>{user?.email ?? ''} · Administrator</small>
           </div>
         </section>
 
+        <div className="dash-top">
+          <div>
+            <h2 className="studio-dashboard-title">
+              Heritage Studio <span className="spark">✦</span>
+            </h2>
+            <p className="muted">
+              Signed in as{' '}
+              <strong translate="no">
+                {me?.profile.display_name || me?.profile.username || 'Administrator'}
+                {user?.email ? ` · ${user.email}` : ''}
+              </strong>
+              . Save to update the website across every device.
+            </p>
+          </div>
+          <div className="actions">
+            <Link to="/explore#news" className="btn">
+              View live website ↗
+            </Link>
+            <button type="button" className="btn" onClick={exportContent} disabled={exporting}>
+              {exporting ? 'Exporting…' : 'Export content'}
+            </button>
+          </div>
+        </div>
+
         <div className="notice">
           <b>Note:</b> admin access is granted by role. Anyone you promote to <code>admin</code> in the Users tab sees
-          this console in their account menu after signing in normally. Deleting a quiz question only deactivates it, so
+          this studio in their account menu after signing in normally. Deleting a quiz question only deactivates it, so
           past quizzes and homework stay intact.
         </div>
 
@@ -124,7 +142,7 @@ export default function AdminPage() {
           ))}
         </div>
 
-        <div className="tabs" role="tablist">
+        <div className="tabs studio-tabs" role="tablist">
           {TABS.map(([id, label]) => (
             <button
               key={id}
@@ -144,7 +162,7 @@ export default function AdminPage() {
         {tab === 'users' && <UsersPanel toast={toast} />}
         {tab === 'settings' && <BackupPanel toast={toast} onExport={exportContent} />}
 
-        <p className="footer-note">MIRAVA Administrator Console · Content stored in the MIRAVA database</p>
+        <p className="footer-note">MIRAVA Heritage Studio · Content stored in the MIRAVA database</p>
       </main>
 
       <div className={`toast${show ? ' show' : ''}`} role="status" aria-live="polite">

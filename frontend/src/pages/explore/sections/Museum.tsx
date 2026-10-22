@@ -13,16 +13,16 @@ interface Piece {
 }
 
 const PIECES: Piece[] = [
-  { key: 'Madhubani', cat: 'Painting', extra: 'hero-piece', img: 'https://images.unsplash.com/photo-1605640840605-14ac1855827b?auto=format&fit=crop&w=1400&q=90', alt: 'Madhubani painting', small: 'PAINTING · BIHAR', blurb: 'Line, symbol, and story — the frame is part of the tale.' },
-  { key: 'Kalamkari', cat: 'Craft', img: 'https://images.unsplash.com/photo-1584556812952-905a8d920a94?auto=format&fit=crop&w=1200&q=90', alt: 'Kalamkari textile', small: 'CRAFT · ANDHRA' },
-  { key: 'Bharatanatyam', cat: 'Performance', img: 'https://images.unsplash.com/photo-1604600160534-0f6ad25a41c2?auto=format&fit=crop&w=1200&q=90', alt: 'Bharatanatyam', small: 'PERFORMANCE · TAMIL NADU' },
-  { key: 'Handloom', cat: 'Craft', img: 'https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=1200&q=90', alt: 'Handloom', small: 'TEXTILE · INDIA' },
-  { key: 'Terracotta', cat: 'Craft', img: 'https://images.unsplash.com/photo-1565193298357-c6b5f0201d5a?auto=format&fit=crop&w=1200&q=90', alt: 'Terracotta', small: 'CRAFT · BENGAL' },
-  { key: 'Pattachitra', cat: 'Painting', img: 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1200&q=90', alt: 'Pattachitra', small: 'PAINTING · ODISHA' },
-  { key: 'Phulkari', cat: 'Craft', img: 'https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?auto=format&fit=crop&w=1200&q=90', alt: 'Phulkari', small: 'EMBROIDERY · PUNJAB' },
-  { key: 'Channapatna', cat: 'Craft', img: 'https://images.unsplash.com/photo-1602874801006-e26c9b3f9b8b?auto=format&fit=crop&w=1200&q=90', alt: 'Channapatna toys', small: 'WOODCRAFT · KARNATAKA' },
-  { key: 'Kathak', cat: 'Performance', extra: 'wide-piece', img: 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1400&q=90', alt: 'Kathak', small: 'PERFORMANCE · NORTH INDIA' },
-  { key: 'Bidriware', cat: 'Craft', extra: 'wide-piece', img: 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&w=1400&q=90', alt: 'Bidriware', small: 'METALWORK · DECCAN' },
+  { key: 'Madhubani', cat: 'Painting', extra: 'hero-piece', img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTlxG1Q5oMoVN4E5xC4Kg92s8ooVcwdhdv-ulYYHPwzZg&s=10', alt: 'Madhubani painting', small: 'PAINTING · BIHAR', blurb: 'Line, symbol, and story — the frame is part of the tale.' },
+  { key: 'Kalamkari', cat: 'Craft', img: 'https://static.wixstatic.com/media/1b2c9f_cdbe02f1e009485a9236387343c8a688~mv2.jpeg/v1/fill/w_553,h_798,al_c,q_85,enc_avif,quality_auto/1b2c9f_cdbe02f1e009485a9236387343c8a688~mv2.jpeg', alt: 'Kalamkari textile', small: 'CRAFT · ANDHRA' },
+  { key: 'Bharatanatyam', cat: 'Performance', img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTe1HZRIHhH6dcGaxb6qFuU5HURyuDzd-DDryVO16UaFA&s=10', alt: 'Bharatanatyam', small: 'PERFORMANCE · TAMIL NADU' },
+  { key: 'Handloom', cat: 'Craft', img: 'https://img.etimg.com/thumb/width-1200,height-1200,imgsize-961164,resizemode-75,msid-68716260/magazines/panache/how-handloom-sarees-are-weaving-a-storm-in-bengaluru.jpg', alt: 'Handloom', small: 'TEXTILE · INDIA' },
+  { key: 'Terracotta', cat: 'Craft', img: 'https://c9admin.cottage9.com/uploads/5519/terracotta-and-ceramic-art.png', alt: 'Terracotta', small: 'CRAFT · BENGAL' },
+  { key: 'Pattachitra', cat: 'Painting', img: 'https://upload.wikimedia.org/wikipedia/commons/7/7d/Odisha_Pattachitara_Depicting_Unconditional_Love_between_Radha_Krushna.jpg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original', alt: 'Pattachitra', small: 'PAINTING · ODISHA' },
+  { key: 'Phulkari', cat: 'Craft', img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSU0YMyvhrjUotcByVXJDtBfIGM82xBS-O7rtQlsRJchVCSY3w0R7oZW6c&s=10', alt: 'Phulkari', small: 'EMBROIDERY · PUNJAB' },
+  { key: 'Channapatna', cat: 'Craft', img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ3IynWFlOXwAnfyKyRTciw52eWabKL5OqPkyj0hkJfejz2JwByxwHWthw&s=10', alt: 'Channapatna toys', small: 'WOODCRAFT · KARNATAKA' },
+  { key: 'Kathak', cat: 'Performance', extra: 'wide-piece', img: 'https://cdn11.bigcommerce.com/s-x49po/images/stencil/1500x1500/products/90513/249310/1672819583969_Kathak__________________________Uttar_Pradesh_________Size__24__x_30_______Oil_on_canvas__65494.1687000127.JPG?c=2&imbypass=on', alt: 'Kathak', small: 'PERFORMANCE · NORTH INDIA' },
+  { key: 'Bidriware', cat: 'Craft', extra: 'wide-piece', img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRqOo8aStqZXHld5G25UIODEUJEpkfwji9LhqArAFc-BH_Mn1iPbOHwQ4o-&s=10', alt: 'Bidriware', small: 'METALWORK · DECCAN' },
 ]
 
 const CATS = ['All', 'Painting', 'Performance', 'Craft'] as const

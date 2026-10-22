@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
+import { useLanguage } from '../../i18n'
 import {
   ApiError,
   api,
@@ -19,6 +20,7 @@ import {
   type QuizResult,
   type QuizSession,
 } from '../../lib/api'
+import { tr } from './tr'
 import './daily-quiz.css'
 
 export interface DailyQuizModalProps {
@@ -65,6 +67,7 @@ export function DailyQuizModal({ open, onClose }: DailyQuizModalProps) {
 function DailyQuizDialog({ onClose }: { onClose: () => void }) {
   const { me, isGuest, refreshMe } = useAuth()
   const queryClient = useQueryClient()
+  useLanguage()
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [status, setStatus] = useState<DailyStatus | null>(null)
@@ -321,11 +324,14 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
 
   const guestNote = isGuest && (
     <p className="dq-guest">
-      You're playing as a guest — your score counts towards your XP, but guests aren't ranked on the leaderboards.{' '}
+      {tr(
+        "You're playing as a guest — your score counts towards your XP, but guests aren't ranked on the leaderboards.",
+        'आप अतिथि के रूप में खेल रहे हैं — आपका स्कोर आपके अनुभव अंकों में जुड़ता है, लेकिन अतिथि अंकतालिका में शामिल नहीं होते।',
+      )}{' '}
       <Link to="/signup" state={{ upgrade: true }} onClick={onClose}>
         Create an account
       </Link>{' '}
-      to join them.
+      {tr('to join them.', 'और उनमें शामिल हों।')}
     </p>
   )
 
@@ -371,14 +377,14 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
         {phase === 'loading' && (
           <div className="dq-loading">
             <div className="dq-spinner" />
-            Loading today's challenge…
+            {tr("Loading today's challenge…", 'आज की चुनौती लोड हो रही है…')}
           </div>
         )}
 
         {phase === 'error' && (
           <div className="dq-center">
             <div className="dq-result-emoji">⚠️</div>
-            <h3 className="dq-result-title">Couldn't load the quiz</h3>
+            <h3 className="dq-result-title">{tr("Couldn't load the quiz", 'प्रश्नोत्तरी लोड नहीं हो सकी')}</h3>
             <p className="dq-desc">{error}</p>
             <div className="dq-actions dq-actions-center">
               <button type="button" className="dq-pill dq-pill-gold" onClick={() => void loadStatus()}>
@@ -397,26 +403,24 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
             <h2 id="dqTitle" className="dq-h2">
               Heritage quiz
             </h2>
-            <p className="dq-sub">
-              {total} questions · {secs} seconds each · fresh daily challenge
-            </p>
+            <p className="dq-sub">{`${total} questions · ${secs} seconds each · 1,000-question bank · fresh daily challenge`}</p>
             <div className="dq-banner">
               <div>
                 <strong>🌅 TODAY'S HERITAGE CHALLENGE</strong>
-                <small>Question bank of Indian heritage · {total} fresh questions every day · new set at midnight.</small>
+                <small>{`1,000-question bank · ${total} fresh questions every day · new set at midnight.`}</small>
               </div>
               <div>
-                <span className="dq-chip">🎯 {total} QUESTIONS</span>
-                <span className="dq-chip">⚡ {secs}s EACH</span>
+                <span className="dq-chip">{`🎯 ${total} QUESTIONS`}</span>
+                <span className="dq-chip">{`⚡ ${secs}s EACH`}</span>
                 <span className="dq-chip">🏅 BADGES</span>
               </div>
             </div>
             <div className="dq-rules">
               <span>
-                <b>⏱</b> {secs}s per question
+                <b>⏱</b> {tr('{secs}s per question', 'प्रति प्रश्न {secs} सेकंड', { secs })}
               </span>
               <span>
-                <b>✦</b> Speed &amp; streak bonus
+                <b>✦</b> {tr('Speed & streak bonus', 'गति और लगातार सही उत्तर का बोनस')}
               </span>
               <span>
                 <b>🔥</b> Daily streak
@@ -424,10 +428,15 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
             </div>
             {guestNote}
             <button type="button" className="dq-start" disabled={busy} onClick={() => void start()}>
-              {status?.in_progress_session ? 'Resume quiz →' : 'Start quiz →'}
+              {status?.in_progress_session ? tr('Resume quiz →', 'प्रश्नोत्तरी जारी रखें →') : 'Start quiz →'}
             </button>
             {status?.in_progress_session && (
-              <p className="dq-hint">You have a quiz in progress — the clock kept running while you were away.</p>
+              <p className="dq-hint">
+                {tr(
+                  'You have a quiz in progress — the clock kept running while you were away.',
+                  'आपकी प्रश्नोत्तरी अधूरी है — आपके दूर रहने पर भी घड़ी चलती रही।',
+                )}
+              </p>
             )}
           </div>
         )}
@@ -436,18 +445,14 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
           <div>
             <div className="dq-play-top">
               <span className={`dq-timer${!reveal && timeLeft <= 5 ? ' warning' : ''}`} id="quizTimer">
-                ⏱ {reveal ? '—' : `${timeLeft}s`}
+                {reveal ? '⏱ —' : `⏱ ${timeLeft}s`}
               </span>
-              <span className="dq-counter">
-                {Math.min(play.index + 1, play.total)} / {play.total}
-              </span>
+              <span className="dq-counter">{`${Math.min(play.index + 1, play.total)} / ${play.total}`}</span>
             </div>
             <div className="dq-dots">{dots}</div>
             {play.question && (
               <>
-                <div className="dq-topic">
-                  {play.question.topic} · {play.question.difficulty}
-                </div>
+                <div className="dq-topic">{`${play.question.topic} · ${play.question.difficulty}`}</div>
                 <h3 key={questionKey} className="dq-question dq-question-enter">
                   {play.question.question}
                 </h3>
@@ -485,7 +490,7 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
               >
                 {play.index + 1 >= play.total ? 'Finish →' : 'Next →'}
               </button>
-              <span className="dq-live">✦ {play.score} pts</span>
+              <span className="dq-live">{`✦ ${play.score} pts`}</span>
             </div>
           </div>
         )}
@@ -514,9 +519,13 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
             streak={attempt.streak}
             seconds={attempt.time_taken_seconds}
             best={me?.profile.best_quiz_score ?? attempt.score}
-            heading="YOU'VE COMPLETED TODAY'S QUIZ"
+            heading={tr("YOU'VE COMPLETED TODAY'S QUIZ", 'आपने आज की प्रश्नोत्तरी पूरी कर ली है')}
             footer={
-              <p className="dq-tomorrow">🌅 Come back tomorrow for a fresh set of {attempt.total_questions} questions.</p>
+              <p className="dq-tomorrow">
+                {tr('🌅 Come back tomorrow for a fresh set of {count} questions.', '🌅 कल {count} नए प्रश्नों के लिए फिर आएँ।', {
+                  count: attempt.total_questions,
+                })}
+              </p>
             }
             onClose={onClose}
           />
@@ -554,7 +563,11 @@ interface ResultViewProps {
 }
 
 function ResultView({ correct, total, score, streak, seconds, best, xp, badges, heading, footer, onClose }: ResultViewProps) {
+  useLanguage()
   const { emoji, title } = resultHeading(correct, total)
+  const metaLine = [seconds != null ? `⚡ ${seconds}s` : null, `Best score: ${best}`, xp != null ? `+${xp} XP` : null]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <div className="dq-center">
       <div className="dq-result-emoji">{emoji}</div>
@@ -565,9 +578,7 @@ function ResultView({ correct, total, score, streak, seconds, best, xp, badges, 
         <strong className="dq-result-head">{heading}</strong>
         <div className="dq-result-stats">
           <div className="dq-result-stat">
-            <b>
-              {correct}/{total}
-            </b>
+            <b>{`${correct}/${total}`}</b>
             <span>CORRECT</span>
           </div>
           <div className="dq-result-stat">
@@ -575,13 +586,12 @@ function ResultView({ correct, total, score, streak, seconds, best, xp, badges, 
             <span>POINTS</span>
           </div>
           <div className="dq-result-stat">
-            <b>🔥 {streak}</b>
+            <b>{`🔥 ${streak}`}</b>
             <span>DAY STREAK</span>
           </div>
         </div>
         <div className="dq-result-meta">
-          {seconds != null && <>⚡ {seconds}s · </>}Best score: {best}
-          {xp != null && <> · +{xp} XP</>}
+          {metaLine}
         </div>
         {badges && badges.length > 0 ? (
           <div className="dq-result-badges">
@@ -589,7 +599,7 @@ function ResultView({ correct, total, score, streak, seconds, best, xp, badges, 
             <div className="dq-badge-row">
               {badges.map((b, i) => (
                 <span key={b.badge_key} className="dq-badge" style={{ animationDelay: `${i * 90}ms` }} title={b.description ?? ''}>
-                  {b.icon ?? '🏅'} {b.name}
+                  {`${b.icon ?? '🏅'} ${b.name}`}
                 </span>
               ))}
             </div>
@@ -601,7 +611,7 @@ function ResultView({ correct, total, score, streak, seconds, best, xp, badges, 
       {footer}
       <div className="dq-actions dq-actions-center">
         <Link className="dq-pill dq-pill-gold" to="/quiz" onClick={onClose}>
-          Practice in Quiz Arena
+          {tr('Practice in Quiz Arena', 'प्रश्नोत्तरी मंच में अभ्यास करें')}
         </Link>
         <button type="button" className="dq-pill dq-pill-ghost" onClick={onClose}>
           Close

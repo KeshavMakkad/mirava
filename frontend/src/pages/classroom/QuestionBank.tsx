@@ -1,9 +1,33 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, type BankQuestion } from '../../lib/api'
+import { locale, useLanguage } from '../../i18n'
 import { DIFFICULTIES, errorMessage, MAX_QUESTIONS } from './util'
 
 const PAGE = 25
+/** Server pages pulled when a search has to run client-side (Hindi queries). */
+const FETCH_PAGE = 200
+const MAX_FETCH_PAGES = 25
+
+/** Hindi queries can't hit the English-only server search, so they match locally
+ *  against the question and its Hindi translation (MiravaI18n.matches, as in the new classroom.html). */
+const hasNonLatin = (s: string) => /[\u0900-\u097F]/.test(s)
+function matchesQuery(q: BankQuestion, query: string): boolean {
+  const rt = window.MiravaI18n
+  if (rt?.matches) return rt.matches([q.question, q.topic], query)
+  const needle = query.toLocaleLowerCase()
+  return q.question.toLocaleLowerCase().includes(needle) || q.topic.toLocaleLowerCase().includes(needle)
+}
+
+async function fetchAllQuestions(topic: string, difficulty: string): Promise<BankQuestion[]> {
+  const out: BankQuestion[] = []
+  for (let page = 0; page < MAX_FETCH_PAGES; page++) {
+    const res = await api.classrooms.questions({ topic, difficulty, limit: FETCH_PAGE, offset: page * FETCH_PAGE })
+    out.push(...res.items)
+    if (res.items.length < FETCH_PAGE || out.length >= res.total) break
+  }
+  return out
+}
 
 interface Props {
   selected: Map<string, BankQuestion>
@@ -34,22 +58,48 @@ export function QuestionBank({ selected, onToggle, onClear, total, children }: P
     return () => window.clearTimeout(id)
   }, [msg])
 
+  useLanguage() // re-render number formatting on language change
+  const localSearch = hasNonLatin(debounced)
+
   const topics = useQuery({ queryKey: ['quiz-topics'], queryFn: api.quiz.topics, staleTime: 10 * 60_000 })
   const bank = useQuery({
     queryKey: ['bank', debounced, topic, difficulty, page],
     queryFn: () =>
       api.classrooms.questions({ search: debounced, topic, difficulty, limit: PAGE, offset: page * PAGE }),
     placeholderData: keepPreviousData,
+    enabled: !localSearch,
   })
-  const items = bank.data?.items ?? []
-  const pages = Math.max(1, Math.ceil((bank.data?.total ?? 0) / PAGE))
+  const everything = useQuery({
+    queryKey: ['bank-all', topic, difficulty],
+    queryFn: () => fetchAllQuestions(topic, difficulty),
+    enabled: localSearch,
+    staleTime: 10 * 60_000,
+  })
+  const localMatches = localSearch ? (everything.data ?? []).filter((q) => matchesQuery(q, debounced)) : []
+  const view = localSearch
+    ? {
+        isLoading: everything.isLoading,
+        error: everything.error,
+        isPlaceholderData: false,
+        total: everything.data ? localMatches.length : undefined,
+        items: localMatches.slice(page * PAGE, page * PAGE + PAGE),
+      }
+    : {
+        isLoading: bank.isLoading,
+        error: bank.error,
+        isPlaceholderData: bank.isPlaceholderData,
+        total: bank.data?.total,
+        items: bank.data?.items ?? [],
+      }
+  const items = view.items
+  const pages = Math.max(1, Math.ceil((view.total ?? 0) / PAGE))
 
   return (
     <div className="mirava-classroom-bank" style={{ marginTop: 20 }}>
       <div className="bank-header">
         <h3>📚 Question Bank</h3>
         <span style={{ fontSize: 12, color: '#624950' }}>
-          {total !== undefined ? `${total.toLocaleString()} heritage questions` : 'Heritage questions'}
+          {total !== undefined ? `${total.toLocaleString(locale())} heritage questions` : 'Heritage questions'}
         </span>
       </div>
       <div className="bank-controls">
@@ -93,11 +143,11 @@ export function QuestionBank({ selected, onToggle, onClear, total, children }: P
         )}
       </div>
       {msg && <p className="bank-msg">{msg}</p>}
-      <div className="bank-list" style={{ opacity: bank.isPlaceholderData ? 0.6 : 1 }}>
-        {bank.isLoading ? (
+      <div className="bank-list" style={{ opacity: view.isPlaceholderData ? 0.6 : 1 }}>
+        {view.isLoading ? (
           <div className="cls-muted">Loading questions…</div>
-        ) : bank.error ? (
-          <div className="cls-muted">{errorMessage(bank.error)}</div>
+        ) : view.error ? (
+          <div className="cls-muted">{errorMessage(view.error)}</div>
         ) : items.length === 0 ? (
           <div className="cls-muted">No questions match your filters.</div>
         ) : (
@@ -124,7 +174,7 @@ export function QuestionBank({ selected, onToggle, onClear, total, children }: P
         </button>
         <span>
           Page {page + 1} of {pages}
-          {bank.data ? ` · ${bank.data.total} result${bank.data.total === 1 ? '' : 's'}` : ''}
+          {view.total !== undefined ? ` · ${view.total} result${view.total === 1 ? '' : 's'}` : ''}
         </span>
         <button disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)}>
           Next →

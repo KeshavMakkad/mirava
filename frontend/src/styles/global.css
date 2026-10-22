@@ -180,3 +180,35 @@ body {
   z-index: 10000;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
 }
+
+/* ---- Account menu: language toggle + profile symbol (2026 update) ---- */
+.mv-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.mv-account-btn {
+  text-decoration: none;
+}
+.mv-account-signin {
+  padding: 8px 14px;
+}
+.mv-avatar svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.mv-account-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .mv-account-name {
+    display: none;
+  }
+  .mv-account-btn {
+    padding-right: 6px;
+  }
+}

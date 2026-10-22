@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.db import engine
-from app.routers import admin, ai, classrooms, games, leaderboard, me, news, quiz
+from app.routers import admin, ai, classrooms, games, leaderboard, me, news, quiz, rasoi, sentinel
 
 app = FastAPI(title="Mirava API", version="1.0.0")
 
@@ -14,9 +14,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["Content-Type"],
 )
 
-for r in (me, quiz, leaderboard, games, classrooms, news, admin, ai):
+for r in (me, quiz, leaderboard, games, classrooms, news, admin, ai, rasoi, sentinel):
     app.include_router(r.router)
 
 

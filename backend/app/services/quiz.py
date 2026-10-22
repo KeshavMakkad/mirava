@@ -33,10 +33,11 @@ def _rng_for(day: date, salt: str = "") -> random.Random:
     return random.Random(seed)
 
 
-def build_question_set(questions: list[Question], rng: random.Random, count: int = TOTAL_DAILY) -> list[dict]:
-    """Pick `count` questions and shuffle each one's options, tracking the
-    new index of the correct option."""
-    picked = rng.sample(questions, min(count, len(questions)))
+def build_question_set(questions: list[Question], rng: random.Random, count: int = TOTAL_DAILY,
+                       keep_order: bool = False) -> list[dict]:
+    """Pick `count` questions (or take them as given with keep_order) and
+    shuffle each one's options, tracking the new index of the correct option."""
+    picked = list(questions[:count]) if keep_order else rng.sample(questions, min(count, len(questions)))
     out = []
     for q in picked:
         order = list(range(len(q.options)))
@@ -50,9 +51,24 @@ def build_question_set(questions: list[Question], rng: random.Random, count: int
 
 
 def daily_question_set(db: Session, day: date) -> list[dict]:
-    """Every player gets the same 10 questions (in the same order) on a given day."""
-    questions = db.scalars(select(Question).where(Question.is_active).order_by(Question.id)).all()
-    return build_question_set(list(questions), _rng_for(day))
+    """Every player gets the same 10 questions (in the same order) on a given day.
+
+    Days are grouped into cycles of len(bank) // 10 days; the bank is shuffled
+    once per cycle and each day takes the next 10, so no question repeats
+    within a cycle (~100 days for the 1,000-question bank).
+    """
+    questions = list(db.scalars(select(Question).where(Question.is_active).order_by(Question.id)).all())
+    if not questions:
+        return []
+    days_per_cycle = max(1, len(questions) // TOTAL_DAILY)
+    ordinal = day.toordinal()
+    cycle, slot = divmod(ordinal, days_per_cycle)
+    cycle_order = list(questions)
+    _rng_for(date.fromordinal(1), f"cycle-{cycle}").shuffle(cycle_order)
+    todays = cycle_order[slot * TOTAL_DAILY:(slot + 1) * TOTAL_DAILY]
+    # Shuffle options with a per-day seed; keep the day's question order.
+    rng = _rng_for(day)
+    return build_question_set(todays, rng, count=len(todays), keep_order=True)
 
 
 def points_for(correct: bool, seconds_taken: float, index: int) -> int:

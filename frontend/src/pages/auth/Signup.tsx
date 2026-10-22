@@ -3,7 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
 import { FullPageSpinner } from '../../auth/guards'
 import { api, type Role } from '../../lib/api'
-import { AuthShell, Field, Msg } from './AuthShell'
+import { AuthShell, Field, GoogleButton, Msg } from './AuthShell'
 import { errorText } from './authUtils'
 
 type SignupRole = Exclude<Role, 'admin'>
@@ -20,8 +20,8 @@ const STRENGTH_COLORS = ['#e5562f', '#e5562f', '#f5aa35', '#f5aa35', '#5a9e4b', 
 
 function strength(p: string) {
   let s = 0
-  if (p.length >= 8) s++
   if (p.length >= 12) s++
+  if (p.length >= 16) s++
   if (/[A-Z]/.test(p) && /[a-z]/.test(p)) s++
   if (/\d/.test(p)) s++
   if (/[^A-Za-z0-9]/.test(p)) s++
@@ -29,7 +29,7 @@ function strength(p: string) {
 }
 
 export default function Signup() {
-  const { session, loading, isGuest, me, signUp, upgradeGuest, refreshMe } = useAuth()
+  const { session, loading, isGuest, me, signUp, signInWithGoogle, upgradeGuest, refreshMe } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from || '/explore'
@@ -41,6 +41,7 @@ export default function Signup() {
   const [confirm, setConfirm] = useState('')
   const [role, setRole] = useState<SignupRole>('tourist')
   const [busy, setBusy] = useState(false)
+  const [googleBusy, setGoogleBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<null | { email: string; upgrade: boolean }>(null)
   const [prefilled, setPrefilled] = useState(false)
@@ -66,9 +67,10 @@ export default function Signup() {
     if (!USERNAME_RE.test(name))
       return setError('Username must be 3–24 characters: lowercase letters, numbers and underscores.')
     if (display.length > 40) return setError('Display name must be at most 40 characters.')
-    if (!EMAIL_RE.test(addr)) return setError('Please enter a valid email address.')
+    if (!addr || addr.length > 254 || !EMAIL_RE.test(addr)) return setError('Please enter a valid email address.')
     if (!upgrade) {
-      if (password.length < 8) return setError('Password must be at least 8 characters.')
+      if (password.length < 12) return setError('Use a password of at least 12 characters.')
+      if (password.length > 128) return setError('Please enter your password (up to 128 characters).')
       if (password !== confirm) return setError('Passwords do not match.')
     }
 
@@ -125,6 +127,17 @@ export default function Signup() {
 
   const s = strength(password)
 
+  const onGoogle = async () => {
+    setError(null)
+    setGoogleBusy(true)
+    try {
+      await signInWithGoogle(from)
+    } catch (err) {
+      setError(errorText(err, 'Google sign-in is unavailable right now. Please use your email instead.'))
+      setGoogleBusy(false)
+    }
+  }
+
   return (
     <AuthShell
       title={upgrade ? 'Save your progress — Mirava' : 'Sign up — Mirava'}
@@ -142,6 +155,14 @@ export default function Signup() {
         </p>
       )}
       <Msg text={error} />
+      {!upgrade && (
+        <>
+          <GoogleButton onClick={onGoogle} busy={googleBusy} disabled={busy} />
+          <div className="divider" style={{ margin: '0 0 18px' }}>
+            or
+          </div>
+        </>
+      )}
       <form onSubmit={onSubmit} noValidate>
         <Field
           id="username"
@@ -172,6 +193,7 @@ export default function Signup() {
           type="email"
           placeholder="you@example.com"
           autoComplete="email"
+          maxLength={254}
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -182,8 +204,10 @@ export default function Signup() {
           id="password"
           label="Password"
           type="password"
-          placeholder="At least 8 characters"
+          placeholder="At least 12 characters"
           autoComplete="new-password"
+          minLength={12}
+          maxLength={128}
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -203,6 +227,8 @@ export default function Signup() {
           type="password"
           placeholder="Repeat password"
           autoComplete="new-password"
+          minLength={12}
+          maxLength={128}
           required
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
@@ -226,13 +252,14 @@ export default function Signup() {
             </label>
           ))}
         </fieldset>
-        <button className="btn" type="submit" disabled={busy}>
+        <button className="btn" type="submit" disabled={busy || googleBusy}>
           {busy ? 'Creating account…' : upgrade ? 'Save my progress' : 'Sign up'}
         </button>
       </form>
       <p className="switch">
         Already have an account? <Link to="/login">Log in</Link>
       </p>
+      {!upgrade && <p className="note">Your account is saved with MIRAVA and works across your devices.</p>}
       {upgrade && (
         <p className="note">
           Logging in to an existing account instead will leave this guest session and its progress behind.

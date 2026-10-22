@@ -58,7 +58,7 @@ export function VerseReader({ active, speak, onCarve, onTranslate }: Props) {
         </div>
         <div className="card vs-main">
           <div className="k">
-            {v.lang} · {v.src}
+            <span>{v.lang}</span> · <span>{v.src}</span>
           </div>
           <div className="scriptrow" style={{ marginTop: 10 }}>
             {opts.map((s) => (
@@ -67,10 +67,10 @@ export function VerseReader({ active, speak, onCarve, onTranslate }: Props) {
               </button>
             ))}
           </div>
-          <div className="vtext" dir={rtl}>
+          <div className="vtext" translate="no" dir={rtl}>
             {LIPI.convert(v.text, sc)}
           </div>
-          <div className="vrom">{v.words.map((w) => w[1]).join(' ')}</div>
+          <div className="vrom" translate="no">{v.words.map((w) => w[1]).join(' ')}</div>
           <div className="inter">
             {v.words.map((w, i) => (
               <button
@@ -82,8 +82,8 @@ export function VerseReader({ active, speak, onCarve, onTranslate }: Props) {
                   speak(w[0], lang)
                 }}
               >
-                <b dir={rtl}>{sc === 'iast' ? w[1] : LIPI.convert(w[0], sc)}</b>
-                <i>{w[1]}</i>
+                <b translate="no" dir={rtl}>{sc === 'iast' ? w[1] : LIPI.convert(w[0], sc)}</b>
+                <i translate="no">{w[1]}</i>
                 <small>{w[2]}</small>
               </button>
             ))}

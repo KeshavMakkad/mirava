@@ -1,0 +1,510 @@
+/* Ported from the new explore.html: scroll-journey chapter choreography styles. */
+/* Scroll chapter atmosphere. All decoration stays behind the existing content. */
+.mirava-scroll-section {
+  position: relative;
+}
+
+.mirava-scroll-art {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 0;
+  height: 300px;
+  max-height: 100%;
+  overflow: hidden;
+  color: var(--scroll-accent, #d9b474);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mirava-scroll-watermark {
+  position: absolute;
+  top: 48px;
+  right: -14px;
+  display: block;
+  white-space: nowrap;
+  font: 800 clamp(72px, 13.5vw, 210px)/.84 Manrope, sans-serif;
+  letter-spacing: -.075em;
+  color: currentColor;
+  opacity: .052;
+  transform: translate3d(var(--scene-travel, 0px), 0, 0);
+  transform-origin: center;
+}
+
+.mirava-scroll-orbit {
+  position: absolute;
+  top: -78px;
+  right: 5.5%;
+  width: clamp(190px, 23vw, 340px);
+  aspect-ratio: 1;
+  overflow: visible;
+  color: currentColor;
+  opacity: .17;
+  transform: rotate(var(--scene-rotate, 0deg));
+  transform-origin: 50% 50%;
+}
+
+.mirava-scroll-orbit :is(circle, ellipse, path, line, polyline) {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: .75;
+  vector-effect: non-scaling-stroke;
+}
+
+.mirava-scroll-orbit circle:nth-child(2) {
+  stroke-dasharray: 2 6;
+  opacity: .72;
+}
+
+.mirava-scroll-route {
+  position: absolute;
+  top: 171px;
+  left: 7%;
+  width: 86%;
+  height: 87px;
+  color: currentColor;
+  overflow: visible;
+  opacity: .21;
+}
+
+.mirava-scroll-route path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--scene-draw, 0));
+  vector-effect: non-scaling-stroke;
+}
+
+/* A compact chapter compass; the existing app dialogs retain the higher layer. */
+.mirava-journey-dock {
+  position: fixed;
+  z-index: 24;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: 330px;
+  max-width: calc(100% - 32px);
+  border: 1px solid rgba(214, 190, 143, .28);
+  border-radius: 18px;
+  background: rgba(17, 21, 23, .95);
+  color: #eee5d3;
+  box-shadow: 0 14px 44px rgba(8, 8, 12, .3), inset 0 1px 0 rgba(250, 225, 179, .07);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, 28px);
+  transition: opacity .35s ease, transform .45s cubic-bezier(.2, .8, .2, 1), visibility .35s;
+  isolation: isolate;
+}
+
+.mirava-journey-dock.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
+.mirava-journey-controls {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 32px 32px;
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px 12px;
+}
+
+.mirava-journey-index {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--scroll-accent, #e6c18b);
+  cursor: pointer;
+  transition: background .2s ease;
+}
+
+.mirava-journey-index::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(238, 213, 168, .16);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.mirava-journey-index svg {
+  position: absolute;
+  inset: 1px;
+  width: 36px;
+  height: 36px;
+  overflow: visible;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.mirava-journey-index circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--journey-progress, 0));
+}
+
+.mirava-journey-index b {
+  position: relative;
+  font: 600 10px/1 'DM Mono', monospace;
+  letter-spacing: -.03em;
+  color: #efddbf;
+}
+
+.mirava-journey-index:hover,
+.mirava-journey-index[aria-expanded='true'] {
+  background: rgba(226, 189, 127, .09);
+}
+
+.mirava-journey-copy {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mirava-journey-copy small,
+.mirava-journey-copy strong {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mirava-journey-copy small {
+  margin: 0 0 5px;
+  color: #9fa699;
+  font: 400 7.5px/1.2 'DM Mono', monospace;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.mirava-journey-copy strong {
+  color: #f0e5d0;
+  font: 600 11px/1.4 Manrope, sans-serif;
+  letter-spacing: .005em;
+}
+
+.mirava-journey-copy.is-changing strong,
+.mirava-journey-dock.is-changing .mirava-journey-copy strong,
+.mirava-journey-copy strong.is-changing {
+  animation: mirava-journey-title-arrive .32s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.mirava-journey-pause,
+.mirava-journey-next {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(226, 205, 165, .21);
+  border-radius: 50%;
+  background: transparent;
+  color: #c8c3b4;
+  font: 500 12px/1 'DM Mono', monospace;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color .2s ease, border-color .2s ease, background .2s ease, transform .2s ease;
+}
+
+.mirava-journey-next {
+  background: #dfbd83;
+  color: #152023;
+  border-color: transparent;
+  font: 500 16px/1 Manrope, sans-serif;
+}
+
+.mirava-journey-pause:hover,
+.mirava-journey-pause[aria-pressed='true'] {
+  background: rgba(226, 189, 127, .1);
+  color: #f6dfb8;
+  border-color: rgba(232, 202, 153, .55);
+}
+
+.mirava-journey-next:hover {
+  background: #f0d5a2;
+  transform: translateY(2px);
+}
+
+.mirava-journey-dock :is(button, a):focus-visible {
+  outline: 2px solid #f1c978;
+  outline-offset: 4px;
+}
+
+.mirava-journey-menu {
+  position: absolute;
+  inset: auto 0 calc(100% + 12px);
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 8px;
+  max-height: min(430px, 62svh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(214, 190, 143, .25);
+  border-radius: 16px;
+  background: rgba(18, 22, 24, .98);
+  box-shadow: 0 12px 44px rgba(7, 9, 10, .28), inset 0 1px 0 rgba(250, 225, 179, .06);
+  scrollbar-width: thin;
+  scrollbar-color: #71634a transparent;
+  animation: mirava-journey-menu-arrive .25s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.mirava-journey-menu[hidden] {
+  display: none !important;
+}
+
+.mirava-journey-menu a {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 12px;
+  min-height: 43px;
+  padding: 7px 12px 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #bdbeb3;
+  font: 500 11px/1.4 Manrope, sans-serif;
+  text-decoration: none;
+  transition: background .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.mirava-journey-menu a b {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(224, 200, 158, .16);
+  border-radius: 50%;
+  color: #b9a47f;
+  font: 400 9px/1 'DM Mono', monospace;
+}
+
+.mirava-journey-menu a span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mirava-journey-menu a i {
+  font-style: normal;
+  color: #978a74;
+  font-size: 13px;
+}
+
+.mirava-journey-menu a:hover,
+.mirava-journey-menu a.is-active,
+.mirava-journey-menu a[aria-current]:not([aria-current='false']) {
+  background: rgba(225, 189, 126, .08);
+  border-color: rgba(221, 188, 133, .18);
+  color: #f1dfbd;
+}
+
+.mirava-journey-menu a[aria-current]:not([aria-current='false']) b,
+.mirava-journey-menu a.is-active b {
+  border-color: rgba(222, 186, 123, .65);
+  color: #f0d5a2;
+}
+
+@keyframes mirava-journey-title-arrive {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes mirava-journey-menu-arrive {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 600px) {
+  .mirava-scroll-art { height: 245px; }
+  .mirava-scroll-watermark { top: 80px; right: -9px; font-size: clamp(64px, 17vw, 108px); opacity: .06; }
+  .mirava-scroll-orbit { top: -65px; right: -34px; width: 218px; opacity: .13; }
+  .mirava-scroll-route { top: 157px; left: 5%; width: 90%; height: 66px; opacity: .17; }
+  .mirava-journey-dock { bottom: max(16px, env(safe-area-inset-bottom)); border-radius: 16px; }
+  .mirava-journey-controls { min-height: 60px; padding: 9px 11px; gap: 8px; }
+  .mirava-journey-menu { max-height: min(430px, 58svh); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mirava-scroll-watermark,
+  .mirava-scroll-orbit { transform: none !important; }
+  .mirava-scroll-route path { stroke-dashoffset: 0 !important; }
+  .mirava-journey-dock,
+  .mirava-journey-dock *,
+  .mirava-journey-dock *::before { animation: none !important; transition: none !important; }
+}
+
+html.mirava-motion-paused .mirava-scroll-watermark,
+html.mirava-motion-paused .mirava-scroll-orbit { transform: none !important; }
+html.mirava-motion-paused .mirava-scroll-route path { stroke-dashoffset: 0 !important; }
+html.mirava-motion-paused .mirava-journey-dock,
+html.mirava-motion-paused .mirava-journey-dock *,
+html.mirava-motion-paused .mirava-journey-dock *::before { animation: none !important; transition: none !important; }
+
+@media print {
+  .mirava-journey-dock,
+  .mirava-scroll-art { display: none !important; }
+}
+
+/* MIRAVA • scroll chapters. Motion is enabled only after the controller is ready. */
+.explore-root > .section, .explore-root > #pricing, .explore-root > .footer {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+.cards .story-card,.festival-row .fest,.gallery .artwork,.footer-grid > div {
+  opacity: 1;
+  transform: none;
+}
+.mirava-scroll-section > :is(.atlas-head,.atlas-map-shell,.atlas-footnote,.time-header,.time-timeline-wrap,.time-stage,.time-footer,.civil-head,.civil-experience,.civil-selector,.fest-book-head,.fest-book-layout,.fest-book-foot,.language-hero-grid,.revival-bank,.museum-head,.museum-rail,.museum-note,.mir-section-head,.mir-pricing-grid,.mir-price-note,.news-header,.newsroom-layout,.news-footer) {
+  position: relative;
+  z-index: 1;
+}
+.mirava-scroll-ready [data-scroll-reveal] {
+  animation: none !important;
+  /* Separate translate/scale from the existing hover transform and pointer rotate. */
+  transition-property: background-color, border-color, box-shadow, color, rotate, transform;
+}
+.mirava-scroll-ready [data-scroll-reveal]:not([data-scroll-revealed]):not([data-scroll-reveal='heading']) {
+  opacity: 0 !important;
+}
+.mirava-scroll-ready [data-scroll-reveal][data-scroll-revealed] {
+  opacity: 1;
+}
+/* Filtering remains visible as a muted state, even when motion is paused. */
+html.mirava-scroll-ready #art .museum-piece.dimmed[data-scroll-reveal] { opacity: .14 !important; }
+html.mirava-scroll-ready #news :is(.news-item,.news-lead).dimmed[data-scroll-reveal] { opacity: .18 !important; }
+:where(.mirava-scroll-ready) :is(.era-card,.civil-card,.civil-postcard,.museum-piece,.news-lead,.news-item):where([data-scroll-reveal]) {
+  transform: none;
+}
+.mirava-scroll-word-wrap {
+  display: inline-block;
+  overflow: clip;
+  vertical-align: bottom;
+  padding: .1em .045em .2em;
+  margin: -.1em -.045em -.2em;
+}
+.mirava-scroll-word {
+  display: inline-block;
+  transform-origin: 0 100%;
+}
+.mirava-scroll-ready [data-scroll-reveal='heading']:not([data-scroll-revealed]) .mirava-scroll-word {
+  opacity: 0;
+  translate: 0 115%;
+}
+.mirava-scroll-ready [data-scroll-reveal='heading'][data-scroll-revealed] .mirava-scroll-word {
+  opacity: 1;
+  translate: none;
+}
+.mirava-scroll-ready [data-scroll-reveal]:focus-within {
+  opacity: 1 !important;
+}
+.mirava-scroll-ready .mirava-scroll-rest :is(.time-aurora,.mirava-armillary,.revival-aurora,.stage-rings .ring,.museum-aurora,.museum-glyph-field .mg,.news-aurora,.news-glyph-field .ng,.time-grid-lines),
+.mirava-scroll-ready.mirava-scroll-suspended :is(.orbit-card,.mirava-armillary,.time-aurora,.revival-aurora,.stage-rings .ring,.museum-aurora,.museum-glyph-field .mg,.news-aurora,.news-glyph-field .ng) {
+  animation-play-state: paused !important;
+}
+.mirava-scroll-ready .atlas-map-shell { overflow: hidden; }
+.mirava-scroll-scan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -18%;
+  width: 18%;
+  z-index: 850;
+  background: linear-gradient(90deg,transparent,rgba(244,221,153,.17),rgba(255,242,190,.45));
+  border-right: 1px solid rgba(255,240,174,.8);
+  pointer-events: none;
+  opacity: 0;
+}
+.mirava-scroll-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.mirava-scroll-particles i {
+  position: absolute;
+  left: var(--spark-x);
+  top: var(--spark-y);
+  width: var(--spark-size);
+  height: var(--spark-size);
+  border: 1px solid currentColor;
+  color: var(--scroll-accent,#f2c779);
+  opacity: 0;
+  rotate: 45deg;
+}
+.mirava-scroll-ready #top .mirava-orbit {
+  scale: var(--hero-dolly,1);
+  translate: 0 var(--hero-orbit-lift,0px);
+}
+.mirava-scroll-ready #top .hero-body { translate: 0 var(--hero-copy-lift,0px); }
+.mirava-scroll-ready #top .mirava-hero-grid {
+  translate: 0 var(--hero-grid-lift,0px);
+  scale: var(--hero-grid-scale,1);
+}
+.mirava-scroll-ready #top .orbit-card-one { translate: var(--hero-card-spread,0px) 0; }
+.mirava-scroll-ready #top .orbit-card-two { translate: calc(-1 * var(--hero-card-spread,0px)) 0; }
+.mirava-scroll-ready :is(.civil-hero-image,.news-lead-image) {
+  translate: 0 var(--media-drift,0px);
+  scale: 1.07;
+}
+.mirava-scroll-ready .museum-piece img { translate: 0 var(--media-drift,0px); scale: 1.08; }
+.mirava-scroll-ready .museum-piece { overflow: hidden; }
+.mirava-scroll-ready .time-hud .hud-progress-fill { transform-origin: left; }
+.mirava-scroll-ready .mirava-scroll-stat { display: inline-block; font-variant-numeric: tabular-nums; }
+.mirava-scroll-ready .mirava-scroll-step { transform-origin: left center; }
+.mirava-scroll-ready .mirava-scroll-active :is(.eyebrow)::before { transform-origin: left; }
+.mirava-scroll-ready .mirava-scroll-active .eyebrow::before { animation: mirava-scroll-rule .8s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes mirava-scroll-rule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (hover:hover) and (pointer:fine) {
+  .mirava-scroll-ready .museum-piece[data-scroll-reveal][data-scroll-revealed]:hover { transform: translateY(-8px); }
+}
+@media(max-width:700px) {
+  .mirava-scroll-ready #top .mirava-orbit { scale: var(--hero-dolly-mobile,1); translate: 0 var(--hero-mobile-lift,0px); }
+  .mirava-scroll-ready #top .hero-body { translate: 0 var(--hero-copy-mobile,0px); }
+  .mirava-scroll-ready #top .orbit-card-one,.mirava-scroll-ready #top .orbit-card-two { translate: none; }
+  .mirava-scroll-ready :is(.civil-hero-image,.news-lead-image) { scale: 1.035; }
+  .mirava-scroll-ready .museum-piece img { scale: 1.04; }
+  .mirava-scroll-word-wrap { overflow: clip; }
+  .mirava-scroll-scan { display: none; }
+}
+html.mirava-motion-paused [data-scroll-reveal],
+html.mirava-motion-paused .mirava-scroll-word {
+  opacity: 1 !important;
+  translate: none !important;
+  scale: none !important;
+  clip-path: none !important;
+}
+html.mirava-motion-paused #top :is(.mirava-orbit,.hero-body,.mirava-hero-grid,.orbit-card-one,.orbit-card-two),
+html.mirava-motion-paused :is(.civil-hero-image,.news-lead-image,.museum-piece img) {
+  translate: none !important;
+  scale: none !important;
+}
+html.mirava-motion-paused :is(.mirava-scroll-particles,.mirava-scroll-scan) { display: none; }
+@media(prefers-reduced-motion:reduce) {
+  html:not(.mirava-motion-ready) [data-scroll-reveal],html:not(.mirava-motion-ready) .mirava-scroll-word {
+    opacity: 1 !important; translate: none !important; scale: none !important; clip-path: none !important;
+  }
+}
+@media print {
+  [data-scroll-reveal],.mirava-scroll-word { opacity: 1 !important; translate: none !important; scale: none !important; transform: none !important; clip-path: none !important; }
+  .mirava-scroll-particles,.mirava-scroll-scan { display: none !important; }
+}
+

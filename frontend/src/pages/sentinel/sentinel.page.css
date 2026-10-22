@@ -394,3 +394,18 @@ em.mk{font-style:normal;font:700 10px Manrope;color:#7a4a00;background:rgba(241,
 @media (max-width:760px){.kpis{grid-template-columns:1fr 1fr}.ccgrid{grid-template-columns:1fr}.prow{grid-template-columns:72px minmax(0,1fr) auto;row-gap:8px}.prow img{width:72px;height:54px}.prow .pb{grid-column:1/-1;justify-content:flex-end}.nb small{display:none}.vtools{order:3;width:100%}.vtools .tool{flex:1}.cchead h2{font-size:24px}.thead{flex-direction:column-reverse;align-items:flex-start}.gwrap{flex-direction:row;gap:8px;margin:0}.gwrap .band{margin:0}}
 /* React port: placeholder for saved tickets (photos are not stored in the account) */
 .hi .nothumb{width:64px;height:48px;border-radius:8px;flex:none;background:#f6f0e7;display:grid;place-items:center;font-size:22px}
+
+/* AI Monument & Damage Screening (new Sentinel.html vision section) */
+.svision{max-width:1020px;margin:24px auto;padding:28px;background:#fff9f0;border:1px solid #ddbf85;border-radius:18px;color:#321f29}
+.svision h2{font:600 29px Georgia,serif}
+.svision>p{line-height:1.7;margin:10px 0}
+.svision label{display:block;font-weight:700;font-size:13.5px}
+.svision input[type=file]{display:block;margin:12px 0;max-width:100%}
+.svision-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.svision-row img{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid #ddbf85}
+.svision-row .btn.red{background:#56303f}
+.svision-status{margin:14px 0 0;font-size:14px;color:#6f5d5f}
+.svision-status.err{color:#b2321d}
+.svision-result{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.7 system-ui,sans-serif;margin:14px 0 0;padding:16px 18px;background:#fff;border:1px solid #ead8b8;border-radius:12px}
+.svision-advisory{margin:10px 0 0;font-size:12.5px;color:#6f5d5f;font-style:italic}
+@media (max-width:640px){.svision{margin:16px;padding:20px}.svision h2{font-size:24px}}
