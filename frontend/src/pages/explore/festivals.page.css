@@ -665,3 +665,20 @@
   .cal-nav-mid::before,
   .cal-nav-mid::after { width: 14px; }
 }
+
+/* Extra festivals on the same day ("+2"); click the day to cycle through them. */
+.day-cell .fest-more {
+  position: absolute;
+  left: 6px;
+  bottom: 5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #e5562f;
+  color: #fff;
+  font: 700 9px/1.4 'DM Mono', monospace;
+  pointer-events: none;
+}
+.day-cell.has-fest.active .fest-more { background: #ffd879; color: #24151a; }
+@media (max-width: 640px) {
+  .day-cell .fest-more { font-size: 7px; left: 3px; bottom: 3px; padding: 0 3px; }
+}

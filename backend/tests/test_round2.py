@@ -293,3 +293,33 @@ def test_apps_script_transport(monkeypatch):
     with pytest.raises(HTTPException) as e:
         asyncio.run(email.send_email("a@b.com", "Hi", "x", "x"))
     assert e.value.status_code == 502
+
+
+def test_sentinel_verify(client, make_user, monkeypatch):
+    import json as _json
+
+    async def chat(messages, **kw):
+        assert kw["json_mode"] is True
+        ctx = _json.loads(messages[1]["content"][0]["text"].split(": ", 1)[1])
+        assert ctx["candidates"][0]["box"] == [0, 10, 1000, 20]  # clamped before sending
+        return _json.dumps({
+            "is_heritage_surface": True, "scene": "sandstone wall", "summary": "One real crack.", "confidence": 1.7,
+            "candidates": [{"no": 1, "real": True, "reason": "visible fissure"}, {"no": 99, "real": True, "reason": "unknown no"}],
+            "findings": [{"type": "bio", "box": [100, 100, 200, 220], "severity": 7, "description": "moss"},
+                         {"type": "alien", "box": [1, 1, 2, 2], "severity": 1},
+                         {"type": "salt", "box": [500, 500, 400, 600], "severity": 1}],
+        })
+
+    monkeypatch.setattr(sentinel, "openrouter_chat", chat)
+    monkeypatch.setattr(sentinel, "require_ai", lambda *a, **k: "key")
+    _, h = make_user("inspector2")
+    body = {"image": "data:image/jpeg;base64,/9j/4AAQ", "mode": "single", "monument": {"name": "Hampi", "material": "granite"},
+            "candidates": [{"no": 1, "type": "crack", "box": [-5, 10, 1200, 20]}]}
+    r = client.post("/api/sentinel/verify", headers=h, json=body)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["ok"] and d["confidence"] == 1.0
+    assert d["candidates"] == [{"no": 1, "real": True, "reason": "visible fissure"}]
+    assert d["findings"] == [{"type": "bio", "box": [100, 100, 200, 220], "severity": 3, "description": "moss"}]
+    assert client.post("/api/sentinel/verify", headers=h, json={**body, "candidates": [{"no": 1, "type": "nope", "box": [0, 0, 1, 1]}]}).status_code == 422
+    assert client.get("/api/sentinel/verify", headers=h).json()["ok"] is False  # no key in tests

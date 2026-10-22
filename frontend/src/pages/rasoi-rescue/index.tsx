@@ -65,6 +65,7 @@ export default function RasoiRescue() {
                   {label}
                 </a>
               ))}
+              <Link to="/apps/ahara-matrix">Ahara Matrix</Link>
               <Link className="back" to="/explore">
                 ← Mirava
               </Link>

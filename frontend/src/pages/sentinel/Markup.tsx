@@ -192,6 +192,23 @@ function Panel() {
           diagnosis. Untick any false alarm before you raise the ticket.
         </p>
       </div>
+
+      <div className="card" id="aiCard">
+        <h3>
+          <span className="n">4</span>AI vision check
+        </h3>
+        <span className="aist" id="aiSt">
+          <i></i>
+          <span id="aiStT">Checking…</span>
+        </span>
+        <label className="det" style={{ marginTop: 12 }}>
+          <input type="checkbox" id="aiOn" defaultChecked /> Verify every scan with AI vision
+        </label>
+        <p className="note" style={{ marginTop: 8 }}>
+          The AI first checks that the photo really shows a monument surface, then confirms or rejects each on-device
+          finding and adds damage the scan missed. Photos are sent to your Sentinel backend only for this check.
+        </p>
+      </div>
     </aside>
   )
 }

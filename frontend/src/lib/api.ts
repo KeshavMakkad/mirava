@@ -212,6 +212,8 @@ export type GameKey =
   | 'rasoi-rescue'
   | 'jal-parampara'
   | 'quiz-arena'
+  | 'vastu-plan'
+  | 'ahara-matrix'
 
 export interface GameScoreIn {
   score: number

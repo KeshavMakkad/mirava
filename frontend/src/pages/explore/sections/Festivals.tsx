@@ -20,10 +20,11 @@ const DAY_NAMES = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const DAY_NAMES_HI = ['रवि', 'सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि']
 const YEAR = 2026
 
-// Later entries win when two festivals share a date (as in the legacy page).
-const FEST_BY_DATE: Record<string, Festival> = {}
+// Several festivals can share a day (e.g. Nov 24, 2026); the cell shows the first
+// with a "+N" badge, and clicking it again cycles through the rest.
+const FESTS_BY_DATE: Record<string, Festival[]> = {}
 FESTIVALS.forEach((f) => {
-  FEST_BY_DATE[`${f.month}-${f.day}`] = f
+  if (f.day > 0) (FESTS_BY_DATE[`${f.month}-${f.day}`] ??= []).push(f)
 })
 
 function MonthPage({
@@ -60,7 +61,9 @@ function MonthPage({
         ))}
         {Array.from({ length: daysInMonth }, (_, i) => {
           const d = i + 1
-          const fest = FEST_BY_DATE[`${monthName}-${d}`]
+          const fests = FESTS_BY_DATE[`${monthName}-${d}`] ?? []
+          const activeIdx = fests.findIndex((f) => f.name === activeName)
+          const fest = activeIdx >= 0 ? fests[activeIdx] : fests[0]
           const isToday = YEAR === now.getFullYear() && monthIndex === now.getMonth() && d === now.getDate()
           const classes = ['day-cell', fest ? 'has-fest' : '', isToday ? 'today' : '', fest && fest.name === activeName ? 'active' : '']
             .filter(Boolean)
@@ -70,10 +73,12 @@ function MonthPage({
               key={d}
               className={classes}
               data-fest={fest?.name}
-              onClick={fest ? () => onSelect(fest.name) : undefined}
+              title={fests.length > 1 ? fests.map((f) => f.name).join(' · ') : undefined}
+              onClick={fest ? () => onSelect(fests[(activeIdx + 1) % fests.length].name) : undefined}
             >
               <span className="day-num">{d}</span>
               {fest && <span className="fest-label">{fest.name}</span>}
+              {fests.length > 1 && <span className="fest-more">+{fests.length - 1}</span>}
               {fest && (
                 <span className="fest-dot">
                   <span></span>

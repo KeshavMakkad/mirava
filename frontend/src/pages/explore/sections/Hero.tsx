@@ -13,6 +13,7 @@ const APP_LINKS: [string, string][] = [
   ['/quiz', 'Quiz Arena'],
   ['/apps/lost-legends', 'Heritage Game'],
   ['/apps/sentinel', 'Sentinel'],
+  ['/apps/vastu-plan', 'VastuPlan'],
   ['/apps/bhasha', 'Bhasha'],
   ['/apps/vedic-maths', 'Vedic Maths'],
   ['/apps/rasoi-rescue', 'Rasoi'],

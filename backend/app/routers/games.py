@@ -34,6 +34,8 @@ GAMES: dict[str, GameRule] = {
     "rasoi-rescue": GameRule("Rasoi Rescue", 100_000, 10, 150),
     "jal-parampara": GameRule("JalParampara", 100_000, 10, 150),
     "quiz-arena": GameRule("Quiz Arena", 100_000, 10, 150),
+    "vastu-plan": GameRule("VastuPlan AI", 100_000, 10, 150),
+    "ahara-matrix": GameRule("Ahara Matrix", 100_000, 10, 100),
 }
 
 router = APIRouter(prefix="/api/games", tags=["games"])

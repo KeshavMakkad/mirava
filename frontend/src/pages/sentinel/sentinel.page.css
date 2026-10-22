@@ -210,6 +210,19 @@ select.in option{background:#f8f3ec;color:var(--txt)}
 .toast.err{border-color:rgba(216,62,39,0.96)}
 .toast.out{opacity:0;transform:translateY(10px)}
 footer{padding:26px clamp(14px,4vw,64px) 40px;max-width:1500px;margin:0 auto;color:var(--mute);font-size:12px;line-height:1.7;border-top:1px solid var(--line2)}
+.aist{display:inline-flex;align-items:center;gap:7px;font:700 11.5px Manrope;padding:5px 11px;border-radius:99px;border:1px solid var(--line2);background:rgba(60,32,24,.04)}
+.aist i{width:8px;height:8px;border-radius:50%;background:#b9a99a;flex:none}
+.aist.ok i{background:#2f9e5e;box-shadow:0 0 0 3px rgba(47,158,94,.18)}.aist.err i{background:#c8361f}.aist.busy i{background:#d4930f;animation:sn-aipulse 1s infinite}
+@keyframes sn-aipulse{50%{opacity:.3}}
+.airow{display:flex;gap:8px;margin-top:10px}.airow .in{flex:1;min-width:0;font-size:12.5px}
+.aib{display:flex;gap:10px;align-items:flex-start;margin:0 0 14px;padding:10px 13px;border-radius:14px;font-size:12.5px;line-height:1.5;border:1px solid var(--line)}
+.aib b{font-weight:800}.aib.ok{background:rgba(47,158,94,.09);border-color:rgba(47,158,94,.3)}.aib.warn{background:rgba(212,147,15,.1);border-color:rgba(212,147,15,.35)}
+.aib .ic{font-size:18px;line-height:1}
+.triage.rej{background:linear-gradient(150deg,#ece6f6,#f8f3ec)}
+.triage.rej .lvl{background:#5b3fa0;color:#fff}
+.rejact{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+em.mk.ai{color:#1f5f8c;background:rgba(63,140,200,.16)}
+.fi.aifalse small .why{color:#8a2f1f;font-weight:700}
 @keyframes sn-spin{to{transform:rotate(360deg)}}
 @keyframes sn-tin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes sn-alarm{50%{box-shadow:0 0 0 6px rgba(216,64,42,0.125)}}
@@ -223,6 +236,7 @@ footer{padding:26px clamp(14px,4vw,64px) 40px;max-width:1500px;margin:0 auto;col
   .drops.two{grid-template-columns:1fr}
   .panes{grid-template-columns:1fr}
   .top .tbtn span{display:none}
+  .top .tbtn{padding:0 10px;gap:5px}
   .intro{padding-top:26px}
   .stats{grid-template-columns:1fr 1fr}
   .stat b{font-size:20px}

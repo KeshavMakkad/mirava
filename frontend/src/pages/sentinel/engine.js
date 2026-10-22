@@ -4,11 +4,12 @@
 import { CV } from './cv.js';
 import { PDF, buildTicketPDF, buildPatrolPDF, sentinelText, sentinelLocale } from './pdf.js';
 import { initVision } from './vision.js';
+import { http, ApiError } from '../../lib/api';
 import { Samples } from './samples.js';
 import { MONUMENTS, MATERIALS, SUBSTRATE, LEGAL, REMEDY, LEVELS } from './data.js';
 
 /** UI-only preferences (inspector, role, sensitivity, detectors) stay in localStorage. */
-const LOCAL_KEYS = new Set(['sentinelPrefs', 'sentinelDets']);
+const LOCAL_KEYS = new Set(['sentinelPrefs', 'sentinelDets', 'sentinelAiOn']);
 /** Tickets and the Command Centre log go to the per-user state API (metadata only). */
 const REMOTE_KEYS = { sentinelTickets: 'sentinelReports', sentinelIndex: 'sentinelIndex' };
 const STATE_MAX = 60000; // stay below the API's 64 KB value limit
@@ -252,6 +253,89 @@ export function init(root, ctx) {
   }
 
   /* ---------------- scan pipeline ---------------- */
+  /* ---------------- AI vision backend ----------------
+     The new Sentinel.html posted to a separate "sentinel-api" Worker whose URL the
+     inspector could paste in. Here it is OUR FastAPI: GET /api/sentinel/verify reports
+     whether a vision provider is configured, POST verifies a scan. If the endpoint is
+     missing or unconfigured the page stays on-device only. */
+  const AI = (() => {
+    const EP = '/api/sentinel/verify';
+    let state = 'off', provider = '', avail = false;
+    const cache = new WeakMap();
+    const provName = p => p === 'claude' ? 'Claude vision' : 'AI vision';
+    function setStatus(st, text) { state = st; const el = $('#aiSt'); if (!el) return; el.className = 'aist ' + (st === 'ok' ? 'ok' : st === 'err' ? 'err' : st === 'busy' ? 'busy' : ''); $('#aiStT').textContent = text; }
+    async function ping() {
+      setStatus('busy', 'Connecting…');
+      try {
+        const j = await http.get(EP);
+        if (!alive) return false;
+        if (!j || !j.ok) { avail = false; setStatus('err', (j && j.error) || 'Backend has no AI provider configured'); return false; }
+        provider = (j.providers || [])[0] || ''; avail = true;
+        setStatus('ok', 'Connected · ' + provName(provider)); return true;
+      } catch (e) {
+        if (!alive) return false;
+        avail = false;
+        if (e instanceof ApiError && (e.status === 404 || e.status === 405 || e.status === 503)) setStatus('off', 'Not connected — on-device only');
+        else if (e instanceof ApiError && e.status === 401) setStatus('off', 'Sign in to use AI screening.');
+        else setStatus('err', 'Backend unreachable — on-device only');
+        return false;
+      }
+    }
+    function enabled() { return avail && $('#aiOn').checked && state !== 'err'; }
+    function payloadImage(canvas) {
+      const s = Math.min(1, 1024 / Math.max(canvas.width, canvas.height)), c = document.createElement('canvas');
+      c.width = Math.round(canvas.width * s); c.height = Math.round(canvas.height * s);
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(canvas, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', 0.85);
+    }
+    const norm = (b, w, h) => [b[0] / w * 1000, b[1] / h * 1000, b[2] / w * 1000, b[3] / h * 1000].map(v => Math.round(v));
+    async function call(res, mode, mon) {
+      const cands = res.findings.filter(f => !f.manual && !f.ai).slice(0, 30).map((f, k) => ({ no: k + 1, type: mode === 'temporal' ? 'change' : f.type, box: norm(f.box, res.w, res.h), _f: f }));
+      let to;
+      const timeout = new Promise((_, rej) => { to = window.setTimeout(() => { const e = new Error('The AI check timed out.'); e.name = 'AbortError'; rej(e); }, 60000); });
+      try {
+        const j = await Promise.race([http.post(EP, { image: payloadImage(res.src.frame.canvas), mode, monument: { name: mon.name, material: mon.materialLabel }, candidates: cands.map(c => ({ no: c.no, type: c.type, box: c.box })) }), timeout]);
+        if (!j || !j.ok) throw new Error(((j && j.error) || 'Bad reply from backend') + (j && j.details ? ' — ' + j.details.join('; ') : ''));
+        return { data: j, cands: cands.map(c => ({ type: c._f.type, box: c._f.box.slice(), verdict: (j.candidates || []).find(v => v.no === c.no) || null })) };
+      } finally { window.clearTimeout(to); }
+    }
+    // reuse an earlier answer for the same photo when every current candidate matches one it already judged
+    function cached(res) { const c = cache.get(res.src); if (!c) return null; const ok = res.findings.filter(f => !f.manual && !f.ai).every(f => c.cands.some(k => k.type === f.type && iou(k.box, f.box) > 0.5)); return ok ? c : null; }
+    async function verify(res, mode, mon) {
+      if (!enabled()) return null;
+      let c = cached(res);
+      if (!c) { setStatus('busy', 'AI is looking at the photo…'); c = await call(res, mode, mon); cache.set(res.src, c); setStatus('ok', 'Connected · ' + provName(c.data.provider)); }
+      return c;
+    }
+    function apply(res, c, mode, override) {
+      const a = c.data;
+      res.ai = { provider: a.provider, scene: a.scene, summary: a.summary, confidence: a.confidence, rejected: 0, added: 0 };
+      if (!a.is_heritage_surface && !override) { res.aiReject = true; res.localCount = res.findings.length; res.findings = []; return res; }
+      if (!a.is_heritage_surface && override) { res.ai.override = true; return res; }
+      res.findings.forEach(f => {
+        if (f.manual || f.ai) return;
+        const k = c.cands.find(k => k.type === f.type && iou(k.box, f.box) > 0.5); if (!k || !k.verdict) return;
+        if (k.verdict.real) { f.aiOk = true; f.signal = (f.signal || '') + ' · AI ✓'; }
+        else { f.aiFalse = true; f.aiWhy = k.verdict.reason; if (f.include) { f.include = false; res.ai.rejected++; } }
+      });
+      if (mode === 'single') (a.findings || []).forEach(g => {
+        const T = CV.TYPES[g.type]; if (!T || !Array.isArray(g.box) || g.box.length !== 4) return;
+        const box = [g.box[0] / 1000 * res.w, g.box[1] / 1000 * res.h, g.box[2] / 1000 * res.w, g.box[3] / 1000 * res.h].map(Math.round);
+        if (res.findings.some(f => f.include && f.type === g.type && iou(f.box, box) > 0.25)) return;
+        const areaPx = Math.max(1, (box[2] - box[0]) * (box[3] - box[1]));
+        const sev = Math.min(3, Math.max(1, Math.round(+g.severity) || 1));
+        res.findings.push({ type: g.type, name: T.name, short: T.short, color: T.color, box, areaPx, areaPct: areaPx / res.n * 100, len: 0, lid: -1, include: true, sev, signal: 'AI vision', pos: posOf(box, res.w, res.h), detail: g.description || 'Seen by AI vision', ai: true });
+        res.ai.added++;
+      });
+      res.findings.sort((x, y) => (y.include - x.include) || y.sev - x.sev || y.areaPx - x.areaPx); res.findings.forEach((f, i) => f.no = i + 1);
+      return res;
+    }
+    $('#aiOn').checked = store.get('sentinelAiOn', true);
+    listen($('#aiOn'), 'change', () => { store.set('sentinelAiOn', $('#aiOn').checked); if (S.res && S.mode !== 'patrol') runScan(true); });
+    ping();
+    return { verify, apply, enabled, setStatus };
+  })();
+
   const STEPS = {
     single: ['Normalising colour to CIELAB & estimating the stone baseline', 'Segmenting paint, bio-growth, crust & salt anomalies', 'Black-hat / top-hat morphology for cracks & tool marks', 'Grouping, measuring & grading severity'],
     temporal: ['Detecting corner features & rotation-aware descriptors', 'Matching features & solving alignment (RANSAC)', 'Warping archive into today\'s frame, photometric normalisation', 'Windowed SSIM + ΔE colour difference → heat-map', 'Classifying new changes & grading severity']
@@ -281,16 +365,23 @@ export function init(root, ctx) {
       bar.style.width = '100%';
       S.lastScanMs = performance.now() - t0;
       res.src = S.mode === 'single' ? S.imgs.single : S.imgs.after;
+      if (AI.enabled()) {
+        const li = document.createElement('li'); li.innerHTML = '<i></i><span>AI vision: is this a monument surface? confirming each finding</span><em></em>'; list.appendChild(li); lis.push(li);
+        await step();
+        try { const c = await AI.verify(res, S.mode, monument()); if (!alive) return; if (c) AI.apply(res, c, S.mode, S.aiOverride === res.src); }
+        catch (e) { console.warn(e); res.ai = { error: e.name === 'AbortError' ? 'The AI check timed out.' : (e.message || 'The AI check failed.') }; AI.setStatus('err', 'AI check failed — on-device only'); setTimeout(() => AI.setStatus('ok', 'Connected'), 4000); }
+      }
       if (S.res && quiet) { // keep user's dismissals when re-scanning with new settings
         const off = S.res.findings.filter(f => !f.include);
         res.findings.forEach(f => { if (off.some(o => o.type === f.type && iou(o.box, f.box) > 0.4)) f.include = false; });
-        S.res.findings.filter(f => f.manual).forEach(f => { f.no = res.findings.length + 1; res.findings.push(f); });
+        if (!res.aiReject) S.res.findings.filter(f => f.manual).forEach(f => { f.no = res.findings.length + 1; res.findings.push(f); });
       }
       if (!quiet || !S.inspStart) S.inspStart = new Date().toISOString();
       S.res = res; S.sel = -1; S.view = S.mode === 'single' ? 'boxes' : 'heat';
       renderResults();
       setTimeout(() => $('#prog').classList.remove('on'), quiet ? 200 : 900);
-      if (!quiet) { $('#results').scrollIntoView({ behavior: 'smooth', block: 'start' }); const L = level(); toast(L.level ? `Scan complete: ${res.findings.length} finding${res.findings.length === 1 ? '' : 's'}, Level ${L.level} (${LEVELS[L.level].name})` : 'Scan complete: no significant anomaly found'); }
+      if (!quiet && res.aiReject) { $('#results').scrollIntoView({ behavior: 'smooth', block: 'start' }); toast('AI vision: this photo is not a monument surface — nothing assessed', true); }
+      else if (!quiet) { $('#results').scrollIntoView({ behavior: 'smooth', block: 'start' }); const L = level(); toast(L.level ? `Scan complete: ${res.findings.length} finding${res.findings.length === 1 ? '' : 's'}, Level ${L.level} (${LEVELS[L.level].name})` : 'Scan complete: no significant anomaly found'); }
       if (S.mode === 'temporal' && res.align && !res.align.ok && !res.align.skipped) toast('Could not auto-align these photos, so they were compared as-is. Use photos taken from a similar angle.', true);
     } catch (e) {
       console.warn(e); $('#prog').classList.remove('on'); toast(e && e.message && e.message.length < 160 ? e.message : 'The scan failed on this image. Try another photo.', true);
@@ -305,10 +396,10 @@ export function init(root, ctx) {
     if (!inc.length) return { level: 0, primary: null, area: 0 };
     const top = inc.slice().sort((a, b) => b.sev - a.sev || b.areaPx - a.areaPx)[0];
     let areaPx = 0; const lidsByLayer = {};
-    inc.forEach(f => { if (f.manual) return; const ln = r.mode === 'single' ? f.type : 'change'; (lidsByLayer[ln] = lidsByLayer[ln] || new Set()).add(f.lid); });
+    inc.forEach(f => { if (f.manual || f.ai) return; const ln = r.mode === 'single' ? f.type : 'change'; (lidsByLayer[ln] = lidsByLayer[ln] || new Set()).add(f.lid); });
     const seen = new Uint8Array(r.n);
     Object.keys(lidsByLayer).forEach(ln => { const L = r.layers[ln]; if (!L) return; const set = lidsByLayer[ln]; for (let i = 0; i < r.n; i++) if (L.raw[i] && !seen[i] && set.has(L.lab[i])) { seen[i] = 1; areaPx++; } });
-    inc.forEach(f => { if (!f.manual) return; const [x0, y0, x1, y1] = f.box; for (let y = Math.max(0, y0); y < Math.min(r.h, y1); y++) for (let x = Math.max(0, x0), i = y * r.w + x; x < Math.min(r.w, x1); x++, i++) if (!seen[i]) { seen[i] = 1; areaPx++; } });
+    inc.forEach(f => { if (!f.manual && !f.ai) return; const [x0, y0, x1, y1] = f.box; for (let y = Math.max(0, y0); y < Math.min(r.h, y1); y++) for (let x = Math.max(0, x0), i = y * r.w + x; x < Math.min(r.w, x1); x++, i++) if (!seen[i]) { seen[i] = 1; areaPx++; } });
     const denom = r.mode === 'temporal' ? r.n * r.overlapPct / 100 : r.n;
     return { level: top.sev, primary: top, area: areaPx / denom * 100 };
   }
@@ -343,7 +434,7 @@ export function init(root, ctx) {
       for (let i = 0; i < r.n; i++) { if (!L.raw[i]) continue; const c = rgb[L.lab[i]]; if (!c) continue; const p = i * 4; d[p] = d[p] * (1 - alpha) + c[0] * alpha; d[p + 1] = d[p + 1] * (1 - alpha) + c[1] * alpha; d[p + 2] = d[p + 2] * (1 - alpha) + c[2] * alpha; }
     });
     inc.forEach(f => { // inspector-marked regions: hatched fill
-      if (!f.manual) return; const h = f.color.replace('#', ''), c = [0, 2, 4].map(k => parseInt(h.substr(k, 2), 16)), a = alpha * 0.8;
+      if (!f.manual && !f.ai) return; const h = f.color.replace('#', ''), c = [0, 2, 4].map(k => parseInt(h.substr(k, 2), 16)), a = alpha * 0.8;
       const [x0, y0, x1, y1] = f.box;
       for (let y = Math.max(0, y0); y < Math.min(r.h, y1); y++) for (let x = Math.max(0, x0); x < Math.min(r.w, x1); x++) { if (((x + y) >> 2) % 3) continue; const p = (y * r.w + x) * 4; d[p] = d[p] * (1 - a) + c[0] * a; d[p + 1] = d[p + 1] * (1 - a) + c[1] * a; d[p + 2] = d[p + 2] * (1 - a) + c[2] * a; }
     });
@@ -370,7 +461,7 @@ export function init(root, ctx) {
       const on = sel === i;
       ctx.lineWidth = on ? lw * 2 : lw; ctx.strokeStyle = f.color; ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = on ? 10 : 4;
       ctx.setLineDash(f.sev === 3 ? [] : [lw * 4, lw * 2.5]); ctx.strokeRect(x, y, w, h); ctx.setLineDash([]); ctx.shadowBlur = 0;
-      const tag = sentinelText(`#${f.no} ${f.short} · L${f.sev}${f.manual ? ' · marked' : ''}`), tw = ctx.measureText(tag).width + fs * 0.8, th = fs * 1.45;
+      const tag = sentinelText(`#${f.no} ${f.short} · L${f.sev}${f.manual ? ' · marked' : f.ai ? ' · AI' : ''}`), tw = ctx.measureText(tag).width + fs * 0.8, th = fs * 1.45;
       let ty = y - th - 2; if (ty < 0) ty = y + 2; let tx = Math.min(Math.max(0, x), r.w - tw);
       ctx.fillStyle = f.color; ctx.fillRect(tx, ty, tw, th);
       ctx.fillStyle = ['#ffffff', '#ffd23f', '#5ad8ff', '#4cd964'].includes(f.color) ? '#1a0d10' : '#ffffff';
@@ -420,6 +511,27 @@ export function init(root, ctx) {
     return { prev: prev.mhi, d, when, text: `${prev.mhi} → ${cur} (${d === 0 ? 'no change' : (d > 0 ? '▲ ' : '▼ ') + Math.abs(d)}) since ${when}` };
   }
   function renderTriage() {
+    const r0 = S.res;
+    $('#ticketBtn').disabled = !!r0.aiReject; $('#pngBtn').disabled = !!r0.aiReject;
+    if (r0.aiReject) {
+      const a = r0.ai;
+      $('#triage').className = 'triage rej';
+      $('#triage').innerHTML = `<div class="thead"><div><span class="lvl">AI vision · not a monument surface</span><h2>Nothing to assess in this photo</h2></div></div>
+        <p>The AI sees <b>${esc(a.scene || 'something other than a heritage structure')}</b>${a.confidence ? ` (${Math.round(a.confidence * 100)}% sure)` : ''}. Sentinel only grades photos of monument fabric — stone, brick, plaster, carving. ${r0.localCount ? `The on-device scan had flagged ${r0.localCount} region${r0.localCount === 1 ? '' : 's'}; they were discarded as meaningless here.` : ''}</p>
+        <p style="margin-top:8px">${esc(a.summary || '')}</p>
+        <div class="rejact"><button class="btn sm" type="button" id="aiOverride">It is a monument — show the scan anyway</button></div>`;
+      $('#aiOverride').onclick = () => { S.aiOverride = r0.src; runScan(true); };
+      return;
+    }
+    renderTriageCore();
+    const a = r0.ai; if (!a) return;
+    const box = document.createElement('div');
+    if (a.error) { box.className = 'aib warn'; box.innerHTML = `<span class="ic">⚠️</span><span><b>On-device result only — not verified by AI.</b> ${esc(a.error)}</span>`; }
+    else if (a.override) { box.className = 'aib warn'; box.innerHTML = `<span class="ic">⚠️</span><span><b>You overrode the AI.</b> It judged this photo not to be a monument surface (${esc(a.scene || '')}). Findings below are the unverified on-device scan.</span>`; }
+    else { box.className = 'aib ok'; box.innerHTML = `<span class="ic">🧠</span><span><b>Verified by AI vision${a.provider ? ' · ' + esc(a.provider === 'claude' ? 'Claude' : 'Workers AI') : ''}.</b> ${esc(a.summary || a.scene || '')}${a.rejected ? ` <b>${a.rejected}</b> on-device false alarm${a.rejected === 1 ? '' : 's'} unticked.` : ''}${a.added ? ` <b>${a.added}</b> extra finding${a.added === 1 ? '' : 's'} added.` : ''}</span>`; }
+    $('#triage').insertBefore(box, $('#triage').firstChild);
+  }
+  function renderTriageCore() {
     const L = level(), r = S.res, lv = LEVELS[L.level], H = mhi(), m = monument();
     const tr = trendFor(monKey(m), H.v);
     $('#triage').className = 'triage l' + L.level;
@@ -448,11 +560,12 @@ export function init(root, ctx) {
   function thumbOf(f) { if (!f._th || f._thSrc !== S.res.src) { f._th = cropOf(S.res, f, 120).toDataURL('image/jpeg', 0.8); f._thSrc = S.res.src; } return f._th; }
   function renderFindings() {
     const r = S.res, fl = $('#flist');
+    if (r.aiReject) { $('#fCount').textContent = ''; fl.innerHTML = `<div class="empty">🚫 Not assessed — this photo does not show a monument surface.</div>`; return; }
     $('#fCount').textContent = r.findings.length ? 'Click to highlight · untick false alarms' : '';
     if (!r.findings.length) { fl.innerHTML = `<div class="empty">✅ No anomalies detected at sensitivity ${$('#sens').value}/10.</div>`; return; }
-    fl.innerHTML = r.findings.map((f, i) => `<div class="fi ${f.include ? '' : 'off'} ${S.sel === i ? 'sel' : ''}" data-i="${i}">
+    fl.innerHTML = r.findings.map((f, i) => `<div class="fi ${f.include ? '' : 'off'} ${f.aiFalse ? 'aifalse' : ''} ${S.sel === i ? 'sel' : ''}" data-i="${i}">
       <span class="crop" style="border-color:${f.color}"><img src="${thumbOf(f)}" alt="Close-up of finding ${f.no}" loading="lazy"></span>
-      <div><b>#${f.no} ${esc(f.name)}${f.manual ? ' <em class="mk">✎ marked</em>' : ''}</b><small><span>${esc(f.pos)}</span> · <span>${esc(f.detail)}</span>${f.manual ? '' : ' · <span>signal</span> <span>' + esc(f.signal) + '</span>'}</small></div>
+      <div><b>#${f.no} ${esc(f.name)}${f.manual ? ' <em class="mk">✎ marked</em>' : f.ai ? ' <em class="mk ai">🧠 found by AI</em>' : f.aiOk ? ' <em class="mk ai">🧠 AI-confirmed</em>' : ''}</b><small><span>${esc(f.pos)}</span> · <span>${esc(f.detail)}</span>${f.manual ? '' : ' · <span>signal</span> <span>' + esc(f.signal) + '</span>'}${f.aiFalse ? ' · <span class="why">AI: ' + esc(f.aiWhy || 'likely false alarm') + '</span>' : ''}</small></div>
       <div class="tg"><span class="badge s${f.sev}">${['', 'LOW', 'MEDIUM', 'CRITICAL'][f.sev]}</span>${f.manual ? `<button class="del" type="button" data-del="${i}" aria-label="Delete marked finding ${f.no}" title="Delete this mark">✕</button>` : `<input type="checkbox" ${f.include ? 'checked' : ''} aria-label="Include finding ${f.no} in ticket" data-t="${i}">`}</div></div>`).join('');
     fl.querySelectorAll('.fi').forEach(el => el.addEventListener('click', e => {
       const i = +el.dataset.i;
@@ -467,7 +580,7 @@ export function init(root, ctx) {
     return [...seen.values()].map(g => Object.assign(g, REMEDY[g.type]));
   }
   function renderReco() {
-    const r = S.res; if (!r) return; const G = recoGroups(), m = monument();
+    const r = S.res; if (!r) return; $('#reco').style.display = r.aiReject ? 'none' : ''; if (r.aiReject) return; const G = recoGroups(), m = monument();
     const defaced = G.some(g => g.type === 'paint' || g.type === 'carving');
     $('#reco').innerHTML = `<h3>Recommended heritage-safe conservation action</h3><div class="sub">Tuned for ${esc(m.materialLabel)} at ${esc(m.name)}. Based on traditional, reversible conservation practice.</div>
       ${G.length ? G.map(g => `<div class="rg"><h4><span class="badge s${g.sev}">L${g.sev}</span>${esc(g.title)}</h4><ol>${g.actions.map(a => `<li>${esc(a)}</li>`).join('')}</ol><div class="avoid"><b>Avoid:</b> ${g.avoid.map(a => `<span>${esc(a)}</span>`).join('; ')}.</div></div>`).join('') : '<p class="sub">No action needed beyond routine monitoring.</p>'}
@@ -820,7 +933,12 @@ export function init(root, ctx) {
     for (let i = 0; i < todo.length; i++) {
       const e = todo[i], li = list.children[i]; li.className = 'run'; bar.style.width = (i / todo.length * 100) + '%'; await tick();
       const t0 = performance.now();
-      try { const r = CV.scanSingle(e.im.frame, P); r.src = e.im; e.r = summarize(r); } catch (err) { console.warn(err); e.r = { error: true }; }
+      try {
+        const r = CV.scanSingle(e.im.frame, P); r.src = e.im;
+        if (AI.enabled()) { li.querySelector('span').textContent = e.name + ' · AI check…'; try { const c = await AI.verify(r, 'single', e.mon); if (c) AI.apply(r, c, 'single', false); } catch (err) { console.warn(err); } if (!alive) return; li.querySelector('span').textContent = e.name; }
+        e.r = summarize(r);
+        if (r.aiReject) Object.assign(e.r, { reject: true, primary: 'Not a monument surface: ' + (r.ai.scene || 'skipped'), level: 0, n: 0 });
+      } catch (err) { console.warn(err); e.r = { error: true }; }
       li.className = 'done'; li.querySelector('em').textContent = ((performance.now() - t0) / 1000).toFixed(2) + ' s';
     }
     bar.style.width = '100%'; S.busy = false; updateScanBtn(); renderPatrol();
@@ -830,7 +948,7 @@ export function init(root, ctx) {
     if (S.patrolPending) { S.patrolPending = false; runPatrol(false); }
   }
   function patrolStats() {
-    const done = S.patrol.filter(e => e.r && !e.r.error), c = l => done.filter(e => e.r.level === l).length;
+    const done = S.patrol.filter(e => e.r && !e.r.error && !e.r.reject), c = l => done.filter(e => e.r.level === l).length;
     return { done, crit: c(3), med: c(2), low: c(1), clear: c(0), avg: done.length ? Math.round(done.reduce((t, e) => t + e.r.mhi, 0) / done.length) : null };
   }
   const patrolId = () => { const d = new Date(), p = v => String(v).padStart(2, '0'); return `PTL-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`; };
@@ -843,7 +961,7 @@ export function init(root, ctx) {
       <div class="pk"><div class="c3"><b>${st.crit}</b><small>Critical</small></div><div class="c2"><b>${st.med}</b><small>Medium</small></div><div class="c1"><b>${st.low}</b><small>Low</small></div><div class="c0"><b>${st.clear}</b><small>Clear</small></div><div><b style="color:${avgB ? avgB[2] : 'inherit'}">${st.avg != null ? st.avg : '—'}</b><small>Avg MHI</small></div></div></div>
       <div class="plist">${order.map(e => { const r = e.r; return `<div class="prow ${r && !r.error ? 'l' + r.level : ''}">
         <img src="${r && r.thumb ? r.thumb.dataURL : e.im.frame.canvas.toDataURL('image/jpeg', 0.6)}" alt="">
-        <div class="pi"><b>${esc(e.name)}</b><small>${esc(e.mon.name)}${r && !r.error ? ` · ${r.n} finding${r.n === 1 ? '' : 's'}${r.level ? ` · ${esc(r.primary)} (${esc(r.pos)})` : ''}` : r ? ' · scan failed' : ' · waiting…'}</small></div>
+        <div class="pi"><b>${esc(e.name)}</b><small>${esc(e.mon.name)}${r && r.reject ? ` · 🚫 ${esc(r.primary)}` : r && !r.error ? ` · ${r.n} finding${r.n === 1 ? '' : 's'}${r.level ? ` · ${esc(r.primary)} (${esc(r.pos)})` : ''}` : r ? ' · scan failed' : ' · waiting…'}</small></div>
         ${r && !r.error ? `<span class="badge s${r.level || 1}" style="${r.level ? '' : 'background:#3b6fd8'}">${r.level ? 'L' + r.level + ' ' + LEVELS[r.level].name.toUpperCase() : 'CLEAR'}</span><span class="mchip" style="color:${r.color};border-color:${r.color}">MHI ${r.mhi}</span>` : '<span class="pend">…</span><span></span>'}
         <div class="pb"><button class="btn sm" data-open="${e.id}" ${r ? '' : 'disabled'}>Open ↗</button><button class="x sm" data-rm="${e.id}" aria-label="Remove ${esc(e.name)}">×</button></div></div>`; }).join('')}</div>
       <div class="pact"><button class="btn red" id="pPdf" ${st.done.length ? '' : 'disabled'}>📄 Patrol summary PDF</button><button class="btn" id="pLog" ${st.done.length ? '' : 'disabled'}>📊 Log to Command Centre</button><span class="sp"></span><button class="btn sm" id="pClear">Clear queue</button></div>`;

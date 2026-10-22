@@ -49,6 +49,8 @@ const GAME_NAMES: Record<GameKey, [string, string]> = {
   'rasoi-rescue': ['Rasoi Rescue', '🍲'],
   'jal-parampara': ['JalParampara', '💧'],
   'quiz-arena': ['Quiz Arena', '🧠'],
+  'vastu-plan': ['VastuPlan AI', '🏛️'],
+  'ahara-matrix': ['Ahara Matrix', '🥗'],
 }
 
 function metaFor(board: BoardKind): BoardMeta {
