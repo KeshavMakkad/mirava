@@ -1,4 +1,3 @@
-from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 
@@ -10,16 +9,17 @@ def test_auth_required(client):
 
 
 def test_me_and_profile_update(client, make_user):
-    _, h = make_user("ravi", role="teacher")
+    _, h = make_user("ravi", role="teacher")  # a role in signup metadata is ignored
     me = client.get("/api/me", headers=h).json()
     assert me["profile"]["username"] == "ravi"
-    assert me["profile"]["role"] == "teacher"
+    assert me["profile"]["role"] == "member"
     assert me["rank"] == 1
 
     r = client.patch("/api/me", headers=h, json={"display_name": "Ravi K", "username": "ravi_k"})
     assert r.status_code == 200 and r.json()["username"] == "ravi_k"
-    # Admin can't be self-assigned.
-    assert client.patch("/api/me", headers=h, json={"role": "admin"}).status_code == 422
+    # Role can't be self-assigned at all (field is ignored).
+    client.patch("/api/me", headers=h, json={"role": "admin"})
+    assert client.get("/api/me", headers=h).json()["profile"]["role"] == "member"
 
 
 def test_user_state_roundtrip(client, make_user):
@@ -139,57 +139,6 @@ def test_game_scores_and_badges(client, make_user):
     assert board["entries"][0]["score"] == 1200
 
 
-def test_classroom_flow(client, make_user):
-    _, teacher = make_user("guru", role="teacher")
-    sid, student = make_user("shishya", role="student")
-    _, outsider = make_user("outsider")
-    _, guest = make_user(anonymous=True)
-
-    assert client.post("/api/classrooms", headers=student, json={"class_name": "x"}).status_code == 403
-    c = client.post("/api/classrooms", headers=teacher, json={"class_name": "Class 8B"}).json()
-    code = c["class_code"]
-
-    assert client.post("/api/classrooms/join", headers=guest, json={"class_code": code}).status_code == 403
-    assert client.post("/api/classrooms/join", headers=student, json={"class_code": code.lower()}).status_code == 200
-    detail = client.get(f"/api/classrooms/{c['id']}", headers=teacher).json()
-    assert [m["username"] for m in detail["members"]] == ["shishya"]
-
-    qs = client.get("/api/questions", headers=teacher, params={"limit": 3}).json()["items"]
-    assert client.get("/api/questions", headers=student).status_code == 403
-    a = client.post(f"/api/classrooms/{c['id']}/assignments", headers=teacher,
-                    json={"title": "Indus quiz", "question_ids": [q["id"] for q in qs]})
-    assert a.status_code == 201, a.text
-    aid = a.json()["id"]
-
-    hw = client.get("/api/assignments", headers=student).json()
-    assert [x["id"] for x in hw] == [aid] and hw[0]["status"] == "assigned"
-    assert client.get("/api/assignments", headers=outsider).json() == []
-    assert client.get(f"/api/assignments/{aid}/questions", headers=outsider).status_code == 404
-
-    questions = client.get(f"/api/assignments/{aid}/questions", headers=student).json()
-    assert all("answer" not in q for q in questions)
-    answers = [q["answer"] for q in qs]
-    answers[0] = (answers[0] + 1) % len(qs[0]["options"])  # get one wrong
-    sub = client.post(f"/api/assignments/{aid}/submit", headers=student, json={"answers": answers}).json()
-    assert sub["correct_answers"] == 2 and sub["score"] == 20
-    assert client.post(f"/api/assignments/{aid}/submit", headers=student, json={"answers": answers}).status_code == 409
-
-    teacher_view = client.get(f"/api/classrooms/{c['id']}/assignments", headers=teacher).json()
-    assert teacher_view[0]["results"][0]["score"] == 20
-    assert client.get("/api/assignments", headers=student).json()[0]["status"] == "completed"
-
-
-def test_assignment_daily_limit(client, make_user):
-    _, teacher = make_user("busy", role="teacher")
-    c = client.post("/api/classrooms", headers=teacher, json={"class_name": "C"}).json()
-    q = client.get("/api/questions", headers=teacher, params={"limit": 1}).json()["items"][0]["id"]
-    for _ in range(10):
-        assert client.post(f"/api/classrooms/{c['id']}/assignments", headers=teacher,
-                           json={"title": "t", "question_ids": [q]}).status_code == 201
-    assert client.post(f"/api/classrooms/{c['id']}/assignments", headers=teacher,
-                       json={"title": "t", "question_ids": [q]}).status_code == 429
-
-
 def test_admin_cms(client, make_user):
     _, admin = make_user("boss", admin=True)
     uid, user = make_user("pleb")
@@ -213,23 +162,9 @@ def test_admin_cms(client, make_user):
     assert bad.status_code == 422
     assert client.get("/api/admin/stats", headers=admin).json()["questions_admin"] == 1
 
-    r = client.patch(f"/api/admin/users/{uid}/role", headers=admin, json={"role": "teacher"})
-    assert r.json()["role"] == "teacher"
-
-
-def test_expired_assignment(client, make_user, engine):
-    _, teacher = make_user("t2", role="teacher")
-    _, student = make_user("s2", role="student")
-    c = client.post("/api/classrooms", headers=teacher, json={"class_name": "C"}).json()
-    client.post("/api/classrooms/join", headers=student, json={"class_code": c["class_code"]})
-    q = client.get("/api/questions", headers=teacher, params={"limit": 1}).json()["items"][0]["id"]
-    aid = client.post(f"/api/classrooms/{c['id']}/assignments", headers=teacher,
-                      json={"title": "t", "question_ids": [q]}).json()["id"]
-    with engine.begin() as conn:
-        conn.execute(text("update assignments set due_at = :d where id = :id"),
-                     {"d": datetime.now(UTC) - timedelta(hours=1), "id": aid})
-    assert client.get("/api/assignments", headers=student).json()[0]["status"] == "expired"
-    assert client.post(f"/api/assignments/{aid}/submit", headers=student, json={"answers": [0]}).status_code == 409
+    r = client.patch(f"/api/admin/users/{uid}/role", headers=admin, json={"role": "admin"})
+    assert r.json()["role"] == "admin"
+    assert client.patch(f"/api/admin/users/{uid}/role", headers=admin, json={"role": "teacher"}).status_code == 422
 
 
 def test_ai_not_configured(client, make_user):

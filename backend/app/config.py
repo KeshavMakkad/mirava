@@ -36,6 +36,24 @@ class Settings(BaseSettings):
     supabase_secret_key: str | None = None
     recipe_media_bucket: str = "mirava-recipe-media"
 
+    # Public URL of the frontend, used in links inside emails when the request
+    # has no allowed Origin header. Defaults to the first CORS origin.
+    site_url: str | None = None
+
+    # Outgoing email for auth links. Preferred: the Google Apps Script web app in
+    # email/apps-script (sends from a Google account, logs to a Sheet).
+    apps_script_url: str | None = None
+    apps_script_secret: str | None = None
+    # Alternatives: SMTP (e.g. Gmail: smtp.gmail.com, port 465, address + app
+    # password) or a Resend API key.
+    smtp_host: str | None = None
+    smtp_port: int = 465
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    resend_api_key: str | None = None
+    # Sender, e.g. "Mirava <hello@yourdomain.com>". Defaults to the SMTP username.
+    email_from: str | None = None
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _parse_origins(cls, v: object) -> object:

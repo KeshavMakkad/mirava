@@ -12,13 +12,12 @@ export function FullPageSpinner() {
   )
 }
 
-/** Requires any session (guests allowed unless `registered` is set). */
-export function RequireAuth({ children, registered = false }: { children: ReactNode; registered?: boolean }) {
-  const { session, loading, isGuest } = useAuth()
+/** Requires a signed-in session. */
+export function RequireAuth({ children }: { children: ReactNode }) {
+  const { session, loading } = useAuth()
   const location = useLocation()
   if (loading) return <FullPageSpinner />
   if (!session) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
-  if (registered && isGuest) return <Navigate to="/signup" replace state={{ upgrade: true, from: location.pathname }} />
   return <>{children}</>
 }
 
@@ -32,12 +31,12 @@ export function RequireRole({ roles, children }: { roles: Role[]; children: Reac
   return <>{children}</>
 }
 
-/** For login/signup pages: bounce signed-in (non-guest) users onward. */
+/** For login/signup pages: bounce signed-in users onward. */
 export function RedirectIfAuthed({ children }: { children: ReactNode }) {
-  const { session, loading, isGuest } = useAuth()
+  const { session, loading } = useAuth()
   const location = useLocation()
   if (loading) return <FullPageSpinner />
-  if (session && !isGuest) {
+  if (session) {
     const from = (location.state as { from?: string } | null)?.from
     return <Navigate to={from || '/explore'} replace />
   }

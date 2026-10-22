@@ -1,19 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
-import { FullPageSpinner } from '../../auth/guards'
-import { api, type Role } from '../../lib/api'
+import { useAuthProviders } from '../../auth/useAuthProviders'
 import { AuthShell, Field, GoogleButton, Msg } from './AuthShell'
 import { errorText } from './authUtils'
-import { useAuthProviders } from '../../auth/useAuthProviders'
-
-type SignupRole = Exclude<Role, 'admin'>
-
-const ROLES: { value: SignupRole; icon: string; label: string; hint: string }[] = [
-  { value: 'tourist', icon: '🧭', label: 'Explorer', hint: 'Travel & discover' },
-  { value: 'student', icon: '📚', label: 'Student', hint: 'Learn & join a class' },
-  { value: 'teacher', icon: '🎓', label: 'Teacher', hint: 'Run classrooms' },
-]
 
 const USERNAME_RE = /^[a-z0-9_]{3,24}$/
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -30,9 +20,8 @@ function strength(p: string) {
 }
 
 export default function Signup() {
-  const { session, loading, isGuest, me, signUp, signInWithGoogle, upgradeGuest, refreshMe } = useAuth()
+  const { signUp, signInWithGoogle, sendMagicLink } = useAuth()
   const providers = useAuthProviders()
-  const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from || '/explore'
 
@@ -41,24 +30,11 @@ export default function Signup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [role, setRole] = useState<SignupRole>('tourist')
   const [busy, setBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<null | { email: string; upgrade: boolean }>(null)
-  const [prefilled, setPrefilled] = useState(false)
-
-  // Guests upgrading: prefill from their current (auto-generated) profile once it loads.
-  if (isGuest && me && !prefilled) {
-    setPrefilled(true)
-    if (me.profile.display_name && me.profile.display_name !== 'Guest') setDisplayName(me.profile.display_name)
-    if (me.profile.role !== 'admin') setRole(me.profile.role)
-  }
-
-  if (loading) return <FullPageSpinner />
-  if (session && !isGuest && !done) return <Navigate to={from} replace />
-
-  const upgrade = isGuest
+  const [sentTo, setSentTo] = useState<string | null>(null)
+  const [resend, setResend] = useState<'idle' | 'sending' | 'sent'>('idle')
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -70,58 +46,51 @@ export default function Signup() {
       return setError('Username must be 3–24 characters: lowercase letters, numbers and underscores.')
     if (display.length > 40) return setError('Display name must be at most 40 characters.')
     if (!addr || addr.length > 254 || !EMAIL_RE.test(addr)) return setError('Please enter a valid email address.')
-    if (!upgrade) {
-      if (password.length < 12) return setError('Use a password of at least 12 characters.')
-      if (password.length > 128) return setError('Please enter your password (up to 128 characters).')
-      if (password !== confirm) return setError('Passwords do not match.')
-    }
+    if (password.length < 12) return setError('Use a password of at least 12 characters.')
+    if (password.length > 128) return setError('Please enter your password (up to 128 characters).')
+    if (password !== confirm) return setError('Passwords do not match.')
 
     setBusy(true)
     try {
-      if (upgrade) {
-        // Profile fields first (the backend validates username uniqueness), then link the email.
-        await api.me.update({ username: name, display_name: display || name, role })
-        await upgradeGuest(addr)
-        await refreshMe()
-        setDone({ email: addr, upgrade: true })
-      } else {
-        const { needsConfirmation } = await signUp({
-          email: addr,
-          password,
-          username: name,
-          displayName: display || name,
-          role,
-        })
-        if (needsConfirmation) setDone({ email: addr, upgrade: false })
-        else navigate(from, { replace: true })
-      }
+      await signUp({ email: addr, password, username: name, displayName: display || name, next: from })
+      setSentTo(addr)
     } catch (err) {
       setError(errorText(err))
     }
     setBusy(false)
   }
 
-  if (done) {
+  const onResend = async () => {
+    if (!sentTo) return
+    setResend('sending')
+    try {
+      // A magic link also confirms the address.
+      await sendMagicLink(sentTo, from)
+      setResend('sent')
+    } catch (err) {
+      setError(errorText(err))
+      setResend('idle')
+    }
+  }
+
+  if (sentTo) {
     return (
       <AuthShell title="Confirm your email — Mirava" caption="Every craft has a story. Start yours here." eyebrow="Join the journey">
         <div className="done">
           <div className="big">✉</div>
           <h1>Confirm your email</h1>
           <p>
-            We sent a confirmation link to <b>{done.email}</b>.{' '}
-            {done.upgrade
-              ? 'Your progress is already saved to this account — open the link to verify your email and choose a password. You can keep playing in the meantime.'
-              : 'Open it to activate your account, then you will be signed in automatically.'}
+            We sent a confirmation link to <b translate="no">{sentTo}</b>. Open it to activate your account — you'll be
+            signed in automatically.
           </p>
-          {done.upgrade ? (
-            <Link className="btn" to="/explore">
-              Continue to Explore
-            </Link>
-          ) : (
-            <Link className="btn" to="/login">
-              Back to log in
-            </Link>
-          )}
+          <p className="note">Can't find it? Check your spam folder.</p>
+          <Msg text={error} />
+          <button className="btn g" type="button" onClick={onResend} disabled={resend !== 'idle'}>
+            {resend === 'sending' ? 'Sending…' : resend === 'sent' ? 'Sent — check your inbox' : 'Resend the link'}
+          </button>
+          <Link className="btn" to="/login">
+            Back to log in
+          </Link>
         </div>
       </AuthShell>
     )
@@ -141,23 +110,11 @@ export default function Signup() {
   }
 
   return (
-    <AuthShell
-      title={upgrade ? 'Save your progress — Mirava' : 'Sign up — Mirava'}
-      caption="Every craft has a story. Start yours here."
-      eyebrow="Join the journey"
-    >
-      <h1>{upgrade ? 'Save your progress' : 'Create your account'}</h1>
-      <p className="sub">
-        {upgrade ? 'Turn your guest session into a free account.' : 'Join Mirava and keep every story close.'}
-      </p>
-      {upgrade && (
-        <p className="upgrade-note">
-          You are playing as a guest. Your XP, streaks and scores stay with you — we will email you a link to confirm
-          your address.
-        </p>
-      )}
+    <AuthShell title="Sign up — Mirava" caption="Every craft has a story. Start yours here." eyebrow="Join the journey">
+      <h1>Create your account</h1>
+      <p className="sub">Join Mirava and keep every story close.</p>
       <Msg text={error} />
-      {!upgrade && providers?.google && (
+      {providers?.google && (
         <>
           <GoogleButton onClick={onGoogle} busy={googleBusy} disabled={busy} />
           <div className="divider" style={{ margin: '0 0 18px' }}>
@@ -200,8 +157,6 @@ export default function Signup() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        {!upgrade && (
-          <>
         <Field
           id="password"
           label="Password"
@@ -235,38 +190,14 @@ export default function Signup() {
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
         />
-          </>
-        )}
-        <fieldset className="roles">
-          <legend>I am joining as</legend>
-          {ROLES.map((r) => (
-            <label key={r.value} className={role === r.value ? 'on' : undefined}>
-              <input
-                type="radio"
-                name="role"
-                value={r.value}
-                checked={role === r.value}
-                onChange={() => setRole(r.value)}
-              />
-              <span aria-hidden>{r.icon}</span>
-              {r.label}
-              <small>{r.hint}</small>
-            </label>
-          ))}
-        </fieldset>
         <button className="btn" type="submit" disabled={busy || googleBusy}>
-          {busy ? 'Creating account…' : upgrade ? 'Save my progress' : 'Sign up'}
+          {busy ? 'Creating account…' : 'Sign up'}
         </button>
       </form>
       <p className="switch">
         Already have an account? <Link to="/login">Log in</Link>
       </p>
-      {!upgrade && <p className="note">Your account is saved with MIRAVA and works across your devices.</p>}
-      {upgrade && (
-        <p className="note">
-          Logging in to an existing account instead will leave this guest session and its progress behind.
-        </p>
-      )}
+      <p className="note">Your account is saved with MIRAVA and works across your devices.</p>
     </AuthShell>
   )
 }

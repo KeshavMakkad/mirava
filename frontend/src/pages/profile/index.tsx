@@ -12,7 +12,7 @@ import { PageScope } from '../../components/PageScope'
 import { PROFILE_SYMBOLS, ProfileSymbolIcon } from '../../components/ProfileSymbol'
 import { DailyQuizModal } from '../../components/quiz/DailyQuizModal'
 import { setLanguageAsync, useLanguage } from '../../i18n'
-import { ApiError, api, type Badge, type Me, type Profile, type ProfileSymbol, type Role } from '../../lib/api'
+import { ApiError, api, type Badge, type Me, type Profile, type ProfileSymbol } from '../../lib/api'
 import './profile.page.css'
 
 /** Badge catalogue (mirrors the backend seed) so locked badges can be shown too. */
@@ -25,12 +25,6 @@ const BADGE_CATALOG: Badge[] = [
   { badge_key: 'five_perfects', name: 'Five Perfects', description: 'Complete five perfect daily quizzes.', icon: '💎' },
   { badge_key: 'legend_finder', name: 'Legend Finder', description: 'Complete Lost Legends of Bharat.', icon: '🪔' },
   { badge_key: 'shivaji_warrior', name: "Shivaji's Warrior", description: 'Finish the Shivaji fort challenge.', icon: '⚔️' },
-]
-
-const ROLES: { value: Exclude<Role, 'admin'>; label: string; hint: string }[] = [
-  { value: 'tourist', label: 'Tourist', hint: 'Exploring India’s heritage' },
-  { value: 'student', label: 'Student', hint: 'Join classrooms & homework' },
-  { value: 'teacher', label: 'Teacher', hint: 'Create classrooms & assign quizzes' },
 ]
 
 const USERNAME_RE = /^[a-z0-9_]{3,24}$/
@@ -80,7 +74,6 @@ export default function ProfilePage() {
 }
 
 function ProfileBody({ me }: { me: Me }) {
-  const { isGuest } = useAuth()
   const lang = useLanguage()
   const [quizOpen, setQuizOpen] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -97,12 +90,11 @@ function ProfileBody({ me }: { me: Me }) {
             <ProfileSymbolIcon symbol={p.avatar} />
           </div>
           <div className="pf-id-text">
-            <div className="pf-eyebrow">✦ {isGuest ? 'guest explorer' : 'mirava explorer'}</div>
+            <div className="pf-eyebrow">✦ mirava member</div>
             <h1 translate="no">{name}</h1>
             <div className="pf-handle">
               @{p.username}
-              <span className={`pf-role pf-role-${p.role}`}>{p.role}</span>
-              {isGuest && <span className="pf-role pf-role-guest">guest</span>}
+              {p.role === 'admin' && <span className="pf-role pf-role-admin">admin</span>}
             </div>
             <div className="pf-since">Member since {formatDate(p.created_at, lang)}</div>
             {p.location && (
@@ -120,7 +112,7 @@ function ProfileBody({ me }: { me: Me }) {
 
         <div className="pf-stats">
           <Stat value={p.total_xp.toLocaleString()} label="Total XP" accent />
-          <Stat value={me.rank ? `#${me.rank}` : '—'} label={isGuest ? 'Rank · guests unranked' : 'Global rank'} />
+          <Stat value={me.rank ? `#${me.rank}` : '—'} label="Global rank" />
           <Stat value={`🔥 ${p.daily_streak}`} label={`Day streak · best ${p.longest_streak}`} />
           <Stat value={p.best_quiz_score} label="Best quiz score" />
           <Stat value={accuracy == null ? '—' : `${accuracy}%`} label={`Accuracy · ${p.total_correct}/${p.total_questions}`} />
@@ -140,7 +132,7 @@ function ProfileBody({ me }: { me: Me }) {
       <EditProfile key={me.profile.id} profile={me.profile} saved={saved} onSaved={setSaved} />
 
       <div className="pf-grid">
-        {isGuest ? <UpgradeGuest /> : <AccountInfo me={me} />}
+        <AccountInfo me={me} />
         <section className="pf-card pf-pad pf-discover">
           <span className="pf-discover-icon" aria-hidden>
             ↗
@@ -161,12 +153,6 @@ function ProfileBody({ me }: { me: Me }) {
             <div className="pf-eyebrow">Leaderboards</div>
             <h2>Where you stand</h2>
           </div>
-          {isGuest && (
-            <p className="pf-note">
-              Guests aren't ranked. <Link to="/signup" state={{ upgrade: true }}>Create an account</Link> to appear on the
-              boards.
-            </p>
-          )}
         </div>
         <LeaderboardPanel boards={['global', 'daily', 'shivaji', 'lost-legends']} theme="light" />
       </section>
@@ -262,7 +248,6 @@ type FormValues = {
   location: string
   bio: string
   preferred_language: 'en' | 'hi'
-  role: Role
 }
 
 const toForm = (p: Profile): FormValues => ({
@@ -272,7 +257,6 @@ const toForm = (p: Profile): FormValues => ({
   location: p.location ?? '',
   bio: p.bio ?? '',
   preferred_language: p.preferred_language === 'hi' ? 'hi' : 'en',
-  role: p.role,
 })
 
 type Status = { kind: 'ok' | 'error' | 'info'; text: string } | null
@@ -301,7 +285,6 @@ function EditProfile({ profile: p, saved, onSaved }: { profile: Profile; saved: 
     })
   }, [p])
 
-  const isAdmin = p.role === 'admin'
   const server = toForm(p)
   const clean = (f: FormValues) => ({ ...f, display_name: f.display_name.trim(), username: f.username.trim().toLowerCase(), location: f.location.trim(), bio: f.bio.trim() })
   const cur = clean(form)
@@ -350,7 +333,6 @@ function EditProfile({ profile: p, saved, onSaved }: { profile: Profile; saved: 
     if (cur.bio !== server.bio) body.bio = cur.bio
     if (cur.avatar !== server.avatar) body.avatar = cur.avatar
     if (cur.preferred_language !== server.preferred_language) body.preferred_language = cur.preferred_language
-    if (!isAdmin && cur.role !== server.role && cur.role !== 'admin') body.role = cur.role
     if (!Object.keys(body).length) return
     setBusy(true)
     setStatus({ kind: 'info', text: 'Saving…' })
@@ -489,29 +471,6 @@ function EditProfile({ profile: p, saved, onSaved }: { profile: Profile; saved: 
           </select>
         </div>
 
-        <fieldset className="pf-field pf-roles">
-          <legend>I'm a…</legend>
-          {isAdmin ? (
-            <p className="pf-muted">You're an administrator — your role is managed by Mirava.</p>
-          ) : (
-            <div className="pf-role-switch">
-              {ROLES.map((r) => (
-                <label key={r.value} className={`pf-role-opt${form.role === r.value ? ' on' : ''}`}>
-                  <input
-                    type="radio"
-                    name="role"
-                    value={r.value}
-                    checked={form.role === r.value}
-                    onChange={() => set('role', r.value)}
-                  />
-                  <b>{r.label}</b>
-                  <small>{r.hint}</small>
-                </label>
-              ))}
-            </div>
-          )}
-        </fieldset>
-
         <div className="pf-save-row">
           <p className={`pf-status${status ? ` pf-status-${status.kind}` : saved && !dirty ? ' pf-status-ok' : ''}`} role="status" aria-live="polite">
             {status ? status.text : saved && !dirty ? 'Your profile is saved.' : dirty ? 'You have unsaved changes.' : ''}
@@ -535,77 +494,6 @@ function EditProfile({ profile: p, saved, onSaved }: { profile: Profile; saved: 
           </div>
         </div>
       </form>
-    </section>
-  )
-}
-
-function UpgradeGuest() {
-  const { upgradeGuest } = useAuth()
-  const [email, setEmail] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-  const [sentTo, setSentTo] = useState<string | null>(null)
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    setErr(null)
-    const addr = email.trim()
-    if (!/^\S+@\S+\.\S+$/.test(addr)) {
-      setErr('Please enter a valid email address.')
-      return
-    }
-    setBusy(true)
-    try {
-      await upgradeGuest(addr)
-      setSentTo(addr)
-    } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : 'Could not upgrade your account.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <section className="pf-card pf-pad pf-upgrade">
-      <div className="pf-eyebrow">Upgrade account</div>
-      <h2>Keep your progress for good</h2>
-      <p className="pf-muted">
-        You're exploring as a guest. Add your email to turn this guest session into a full Mirava account — your XP,
-        streak and badges come with you, and you'll appear on the leaderboards.
-      </p>
-      {sentTo ? (
-        <div className="pf-sent">
-          <b>📬 Check your inbox</b>
-          <p>
-            We've sent a confirmation email to <b>{sentTo}</b>. Open the link in it to verify your address and choose a
-            password — that finishes the upgrade. Until then you can keep playing as a guest.
-          </p>
-          <button type="button" className="pf-linkbtn" onClick={() => setSentTo(null)}>
-            Use a different email
-          </button>
-        </div>
-      ) : (
-        <form className="pf-form" onSubmit={onSubmit} noValidate>
-          <label className="pf-field">
-            <span>Email</span>
-            <input
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </label>
-          <p className="pf-small">
-            We'll email you a confirmation link. After confirming, you'll set your password and your guest progress is
-            kept.
-          </p>
-          {err && <p className="pf-error">{err}</p>}
-          <button type="submit" className="pf-btn pf-btn-gold" disabled={busy}>
-            {busy ? 'Sending…' : 'Upgrade my account'}
-          </button>
-        </form>
-      )}
     </section>
   )
 }
@@ -643,11 +531,6 @@ function AccountInfo({ me }: { me: Me }) {
         <Link className="pf-btn" to="/quiz">
           🧠 Quiz Arena
         </Link>
-        {p.role !== 'tourist' && (
-          <Link className="pf-btn" to="/classroom">
-            🏫 Classroom
-          </Link>
-        )}
         <Link className="pf-btn" to="/explore">
           🗺️ Explore
         </Link>

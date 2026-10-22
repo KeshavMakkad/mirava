@@ -11,7 +11,7 @@ type SubmitState = { status: 'idle' } | { status: 'saving' } | { status: 'saved'
 
 /** "The Maratha Guardian" mini-game modal. Scores go to the server for signed-in players. */
 export function ShivajiGame({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { user, isGuest, refreshMe } = useAuth()
+  const { user, refreshMe } = useAuth()
   const queryClient = useQueryClient()
   const modalRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -154,12 +154,6 @@ export function ShivajiGame({ open, onClose }: { open: boolean; onClose: () => v
                     </>
                   )}
                   {submit.status === 'error' && <span className="shivaji-score-error">{submit.message}</span>}
-                  {isGuest && (
-                    <span className="shivaji-guest">
-                      Playing as a guest — <Link to="/signup" state={{ upgrade: true }}>create an account</Link> to join
-                      the leaderboards.
-                    </span>
-                  )}
                   {!user && (
                     <span className="shivaji-guest">
                       <Link to="/login">Sign in</Link> to save your score.

@@ -81,7 +81,7 @@ const qs = (params: Record<string, string | number | undefined | null>) => {
 
 // ---- types ----------------------------------------------------------------------
 
-export type Role = 'tourist' | 'student' | 'teacher' | 'admin'
+export type Role = 'member' | 'admin'
 
 export interface Profile {
   id: string
@@ -232,73 +232,17 @@ export interface GameScoreOut {
   completed_at: string
 }
 
-export interface Classroom {
-  id: string
-  class_name: string
-  class_code: string
-  teacher_id: string
-  teacher_name: string | null
-  member_count: number
-  created_at: string
-}
 
-export interface ClassroomMember {
-  student_id: string
-  username: string
-  display_name: string | null
-  total_xp: number
-  joined_at: string
-}
 
-export interface ClassroomDetail extends Classroom {
-  members: ClassroomMember[]
-}
 
 export interface BankQuestion extends QuizQuestion {
   answer: number
   source: 'bank' | 'admin'
 }
 
-export interface ResultSummary {
-  student_id: string
-  student_name: string | null
-  score: number
-  correct_answers: number
-  total_questions: number
-  submitted_at: string
-}
 
-export interface Assignment {
-  id: string
-  classroom_id: string
-  class_name: string | null
-  title: string
-  description: string | null
-  student_id: string | null
-  question_count: number
-  max_points: number
-  due_at: string | null
-  created_at: string
-  status: 'assigned' | 'completed' | 'expired'
-  my_result: ResultSummary | null
-  results: ResultSummary[] | null
-}
 
-export interface ReviewItem {
-  id: string
-  question: string
-  options: string[]
-  selected: number | null
-  correct_index: number
-  correct: boolean
-}
 
-export interface HomeworkResult {
-  score: number
-  correct_answers: number
-  total_questions: number
-  review: ReviewItem[]
-}
 
 export interface NewsItem {
   id: string
@@ -395,11 +339,18 @@ export interface ChatMessage {
 // ---- endpoints ------------------------------------------------------------------
 
 export const api = {
+  /** Auth emails are sent by our backend (Supabase's own mailer is rate-limited). */
+  auth: {
+    signup: (body: { email: string; password: string; username: string; display_name?: string; next?: string }) =>
+      http.post<{ ok: true; email: string }>('/api/auth/signup', body),
+    magicLink: (email: string, next?: string) => http.post<{ ok: true }>('/api/auth/magic-link', { email, next }),
+    passwordReset: (email: string) => http.post<{ ok: true }>('/api/auth/password-reset', { email }),
+  },
+
   me: {
     get: () => http.get<Me>('/api/me'),
     update: (
       body: Partial<Pick<Profile, 'display_name' | 'username' | 'avatar_url' | 'bio' | 'location' | 'preferred_language' | 'avatar'>> & {
-        role?: Exclude<Role, 'admin'>
       },
     ) =>
       http.patch<Profile>('/api/me', body),
@@ -437,30 +388,7 @@ export const api = {
       ),
   },
 
-  classrooms: {
-    list: () => http.get<Classroom[]>('/api/classrooms'),
-    create: (class_name: string) => http.post<Classroom>('/api/classrooms', { class_name }),
-    detail: (id: string) => http.get<ClassroomDetail>(`/api/classrooms/${id}`),
-    remove: (id: string) => http.del(`/api/classrooms/${id}`),
-    removeMember: (id: string, studentId: string) => http.del(`/api/classrooms/${id}/members/${studentId}`),
-    join: (class_code: string) => http.post<Classroom>('/api/classrooms/join', { class_code }),
-    leave: (id: string) => http.post(`/api/classrooms/${id}/leave`),
-    assignments: (id: string) => http.get<Assignment[]>(`/api/classrooms/${id}/assignments`),
-    assign: (
-      id: string,
-      body: { title: string; description?: string; question_ids: string[]; student_id?: string | null; due_in_hours?: number },
-    ) => http.post<Assignment>(`/api/classrooms/${id}/assignments`, body),
-    questions: (params: { search?: string; topic?: string; difficulty?: string; limit?: number; offset?: number }) =>
-      http.get<Page<BankQuestion>>(`/api/questions${qs(params)}`),
-  },
 
-  homework: {
-    list: () => http.get<Assignment[]>('/api/assignments'),
-    questions: (id: string) => http.get<QuizQuestion[]>(`/api/assignments/${id}/questions`),
-    submit: (id: string, answers: (number | null)[]) => http.post<HomeworkResult>(`/api/assignments/${id}/submit`, { answers }),
-    review: (id: string) => http.get<HomeworkResult>(`/api/assignments/${id}/review`),
-    remove: (id: string) => http.del(`/api/assignments/${id}`),
-  },
 
   news: {
     list: (limit = 10) => http.get<NewsItem[]>(`/api/news${qs({ limit })}`),

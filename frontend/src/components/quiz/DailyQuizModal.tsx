@@ -65,7 +65,7 @@ export function DailyQuizModal({ open, onClose }: DailyQuizModalProps) {
 }
 
 function DailyQuizDialog({ onClose }: { onClose: () => void }) {
-  const { me, isGuest, refreshMe } = useAuth()
+  const { me, refreshMe } = useAuth()
   const queryClient = useQueryClient()
   useLanguage()
 
@@ -322,19 +322,6 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
   const total = status?.total ?? play?.total ?? 10
   const secs = status?.seconds_per_question ?? 15
 
-  const guestNote = isGuest && (
-    <p className="dq-guest">
-      {tr(
-        "You're playing as a guest — your score counts towards your XP, but guests aren't ranked on the leaderboards.",
-        'आप अतिथि के रूप में खेल रहे हैं — आपका स्कोर आपके अनुभव अंकों में जुड़ता है, लेकिन अतिथि अंकतालिका में शामिल नहीं होते।',
-      )}{' '}
-      <Link to="/signup" state={{ upgrade: true }} onClick={onClose}>
-        Create an account
-      </Link>{' '}
-      {tr('to join them.', 'और उनमें शामिल हों।')}
-    </p>
-  )
-
   const optionClass = (i: number) => {
     let c = 'dq-option dq-option-enter'
     if (!reveal) return c
@@ -426,7 +413,6 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
                 <b>🔥</b> Daily streak
               </span>
             </div>
-            {guestNote}
             <button type="button" className="dq-start" disabled={busy} onClick={() => void start()}>
               {status?.in_progress_session ? tr('Resume quiz →', 'प्रश्नोत्तरी जारी रखें →') : 'Start quiz →'}
             </button>
@@ -506,7 +492,6 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
             xp={result.xp_earned}
             badges={result.new_badges}
             heading="TODAY'S CHALLENGE COMPLETE"
-            footer={guestNote}
             onClose={onClose}
           />
         )}

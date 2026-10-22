@@ -9,10 +9,11 @@ Mirava started as a set of static HTML pages from a hackathon. It is now a full 
 | Auth + DB | Supabase (Auth + Postgres) | — |
 
 ```
-Browser ──(email/password · magic link · Google · guest)──▶ Supabase Auth
+Browser ──(email/password · magic link · Google)──▶ Supabase Auth
    │                                                   │ JWT
    └──── /api/* + Bearer <Supabase access token> ──▶ FastAPI ──▶ Supabase Postgres
                                                        ├──▶ Supabase Storage (private recipe media)
+                                                       ├──▶ Apps Script emailer (auth emails, logged to a Sheet)
                                                        └──▶ OpenRouter (AI, server-side key)
 ```
 
@@ -40,12 +41,11 @@ through Supabase's REST API.
   - **Bhāṣā**: a translator with guided language lessons.
   - **JalParampara**: includes a water-strategy mission.
   - **Quiz Arena**: has its Hall of Scholars leaderboard.
-- **Classroom**: teachers create classes (join codes), browse the question bank, and assign homework to
-  one student or a whole class (10 per day). Students join, take the homework, and review their answers.
 - **Admin console** (role `admin`): heritage news CMS, question manager, user roles, stats, and JSON
   export/import.
-- **Auth**: email + password (with confirmation and password reset), magic link, Google, and guest mode.
-  A guest can upgrade to a full account and keep their progress.
+- **Auth**: email + password (with email confirmation and password reset), magic link, and Google. Auth
+  emails are sent by Mirava's own emailer: Supabase generates the one-time links, and a Google Apps Script
+  web app delivers them ([`email/apps-script/`](email/apps-script/)), so Supabase's mailer rate limit doesn't apply.
 - **Profile**: a profile symbol, bio, location, preferred language, stats, badges and leaderboards.
 
 ## Setup
@@ -53,16 +53,14 @@ through Supabase's REST API.
 ### 1. Supabase project
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. **Authentication → Sign In / Providers**: enable **Email** (keep "Confirm email" on) and
-   **Allow anonymous sign-ins** (needed for guest mode). For **Google**, create an OAuth client in Google
+2. **Authentication → Sign In / Providers**: enable **Email** (keep "Confirm email" on). For **Google**, create an OAuth client in Google
    Cloud Console with the redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`, then paste its
    client ID and secret into Supabase's Google provider.
 3. **Storage**: create a **private** bucket named `mirava-recipe-media` (for recipe photos and audio).
 4. **Authentication → URL Configuration**:
    - Site URL: `http://localhost:5173` (your production URL later)
    - Redirect URLs: `http://localhost:5173/**` (and the same for production). This covers
-     `/auth/callback` (magic links, confirmations) and `/reset-password` (password reset, and the
-     guest-upgrade step where a guest sets their password after verifying their email).
+     `/auth/callback` (Google sign-in). Links in emails go to `/auth/confirm`, which is built by the backend.
 5. Collect these values:
    - Project URL and **publishable key** (Project Settings → API Keys), for the frontend.
    - **Secret key** (`sb_secret_…`, same page), for the backend. It's used only to read and write the private media bucket.
@@ -84,10 +82,11 @@ Migrations live in [`backend/alembic/versions/`](backend/alembic/versions/):
 
 - `0001`: tables (generated from [`app/models.py`](backend/app/models.py))
 - `0002`: Supabase integration: `profiles.id → auth.users`, a trigger that creates a profile on signup
-  (email, magic link or guest), syncs the profile when a guest upgrades, adds the leaderboard view,
+  (email, magic link or Google), keeps the profile's email in sync, adds the leaderboard view,
   indexes, and deny-all RLS
 - `0003`: seed badges and the question bank
 - `0004`: profile symbol, bio, location and language; Hindi news fields; the recipe vault and media tables
+- `0005`: remove the classroom feature; every account is a `member` (`admin` is granted manually)
 
 After changing models, run `alembic revision --autogenerate -m "..."`. The `auth` schema is excluded
 from autogenerate.
@@ -116,7 +115,8 @@ The backend runs on **Render** using [`render.yaml`](render.yaml) and the Docker
 `alembic upgrade head` on start. The frontend runs on **Vercel** using [`frontend/vercel.json`](frontend/vercel.json).
 
 1. **Render** → New → Blueprint → pick this repo. Set the environment variables: `DATABASE_URL`,
-   `SUPABASE_SECRET_KEY`, `OPENROUTER_API_KEY`, and `CORS_ORIGINS` (a JSON list with your Vercel URL).
+   `SUPABASE_SECRET_KEY`, `OPENROUTER_API_KEY`, `CORS_ORIGINS` and `SITE_URL` (your Vercel URL), and
+   `APPS_SCRIPT_URL` and `APPS_SCRIPT_SECRET` (see [`email/apps-script/README.md`](email/apps-script/README.md)).
 2. **Vercel** → New Project → this repo, **Root Directory `frontend`**. Set `VITE_SUPABASE_URL`,
    `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_API_URL` (the Render URL).
 3. **Supabase** → URL Configuration: add `https://<vercel-domain>/**` and set it as the Site URL.
@@ -146,7 +146,7 @@ All endpoints are under `/api`. Interactive docs are at `/docs`.
 | Quiz | `GET /quiz/daily/status`, `POST /quiz/daily/start`, `POST /quiz/practice/start`, `POST /quiz/sessions/{id}/answer · next · finish`, `GET /quiz/topics` |
 | Leaderboards | `GET /leaderboard/global · daily · games/{game}` |
 | Games | `POST /games/{game}/scores`, `GET /games/{game}/scores/me` |
-| Classroom | `POST/GET /classrooms`, `POST /classrooms/join`, `GET /questions`, `POST /classrooms/{id}/assignments`, `GET /assignments`, `POST /assignments/{id}/submit`, … |
+| Auth emails | `POST /auth/signup`, `POST /auth/magic-link`, `POST /auth/password-reset` |
 | News | `GET /news` |
 | Admin | `/admin/stats · news · questions · users` |
 | Rasoi | `GET/POST /rasoi/recipes`, `DELETE /rasoi/recipes/{id}`, `GET /rasoi/public`, `POST /rasoi/review`, `GET/PUT/DELETE /rasoi/recipes/{id}/media/{media_id}` |
@@ -158,5 +158,5 @@ All endpoints are under `/api`. Interactive docs are at `/docs`.
 - The legacy pages hard-coded an OpenRouter API key (`sk-or-v1-01ab…`) and admin credentials in
   client-side JavaScript. **Revoke that OpenRouter key.** It has been published. In the new app, the
   key exists only in the backend's `.env`.
-- Roles are enforced on the server. Users can pick `tourist`, `student` or `teacher`. Only an
-  existing admin, or SQL, can grant `admin`.
+- Roles are enforced on the server. Every account is a `member`; only an existing admin, or SQL, can
+  grant `admin`.

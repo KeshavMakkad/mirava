@@ -7,11 +7,11 @@ import './lost-legends.page.css'
 
 /** Lost Legends of Bharat (ported from the hackathon's game.html: 2D open world + arenas, trials, 3D monuments). */
 export default function LostLegendsPage() {
-  const { me, isGuest, refreshMe } = useAuth()
+  const { me, refreshMe } = useAuth()
   const navigate = useNavigate()
   const ref = useLegacyPage(
     (root: HTMLElement, ctx: LegacyContext) => initLostLegends(root, ctx, { onScore: () => refreshMe() }),
-    { me, isGuest, navigate },
+    { me, navigate },
   )
 
   return (

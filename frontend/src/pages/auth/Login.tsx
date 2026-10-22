@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
 import { AuthShell, Field, GoogleButton, Msg } from './AuthShell'
 import { errorText } from './authUtils'
-import { useAuthProviders } from '../../auth/useAuthProviders'
 
 type Mode = 'password' | 'magic' | 'forgot'
 type Sent = { kind: 'magic' | 'reset'; email: string } | null
@@ -11,8 +10,7 @@ type Sent = { kind: 'magic' | 'reset'; email: string } | null
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function Login() {
-  const { signIn, signInWithGoogle, sendMagicLink, sendPasswordReset, continueAsGuest, isGuest } = useAuth()
-  const providers = useAuthProviders()
+  const { signIn, signInWithGoogle, sendMagicLink, sendPasswordReset } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from || '/explore'
@@ -20,7 +18,7 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>('password')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState<null | 'submit' | 'guest' | 'google'>(null)
+  const [busy, setBusy] = useState<null | 'submit' | 'google'>(null)
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState<Sent>(null)
 
@@ -39,11 +37,22 @@ export default function Login() {
     setBusy('submit')
     try {
       if (mode === 'password') {
-        await signIn(addr, password)
+        try {
+          await signIn(addr, password)
+        } catch (err) {
+          // Account exists but the confirmation link was never opened: offer a fresh link.
+          if (/not confirmed/i.test(String((err as Error)?.message))) {
+            setMode('magic')
+            setError('Please confirm your email first — tap “Send magic link” and we’ll email you a fresh sign-in link.')
+            setBusy(null)
+            return
+          }
+          throw err
+        }
         navigate(from, { replace: true })
         return
       }
-      if (mode === 'magic') await sendMagicLink(addr)
+      if (mode === 'magic') await sendMagicLink(addr, from)
       else await sendPasswordReset(addr)
       setSent({ kind: mode === 'magic' ? 'magic' : 'reset', email: addr })
     } catch (err) {
@@ -60,19 +69,6 @@ export default function Login() {
       // The browser is now leaving for Google.
     } catch (err) {
       setError(errorText(err, 'Google sign-in is unavailable right now. Please use your email instead.'))
-      setBusy(null)
-    }
-  }
-
-  const onGuest = async () => {
-    setError(null)
-    setBusy('guest')
-    try {
-      // Already browsing as a guest: just carry on.
-      if (!isGuest) await continueAsGuest()
-      navigate(from, { replace: true })
-    } catch (err) {
-      setError(errorText(err, 'Could not start a guest session. Please try again.'))
       setBusy(null)
     }
   }
@@ -168,19 +164,11 @@ export default function Login() {
           {busy === 'submit' ? (mode === 'password' ? 'Opening Mirava…' : 'Sending…') : submitLabel}
         </button>
       </form>
-      {providers?.anonymous && (
-        <>
-          <div className="divider">or</div>
-          <button className="btn g" type="button" onClick={onGuest} disabled={!!busy}>
-            {busy === 'guest' ? 'Opening Mirava…' : 'Continue as guest'}
-          </button>
-        </>
-      )}
       <p className="switch">
         Don't have an account? <Link to="/signup">Sign up</Link>
       </p>
       <p className="note">Your account is saved with MIRAVA and works across your devices.</p>
-      <p className="note">Guests can explore and play; create an account to keep your progress and join leaderboards.</p>
+      <p className="note">Create an account to keep your progress and join the leaderboards.</p>
     </AuthShell>
   )
 }

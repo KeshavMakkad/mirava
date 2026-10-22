@@ -13,7 +13,8 @@ function nextPath(): string {
 }
 
 /**
- * Landing spot for magic-link, Google OAuth, signup-confirmation and email-change links.
+ * Landing spot for Google OAuth (and any Supabase-sent link). Links in emails
+ * our backend sends go to /auth/confirm instead.
  * supabase-js (PKCE + detectSessionInUrl) exchanges the `?code=` itself; we
  * just wait for the session to appear, then continue into the app.
  */
@@ -32,7 +33,6 @@ export default function AuthCallback() {
 
   useEffect(() => {
     if (urlError || loading || !session) return
-    // Email confirmation may have turned a guest into a full account.
     void refreshMe()
     navigate(next, { replace: true })
   }, [urlError, loading, session, navigate, refreshMe, next])

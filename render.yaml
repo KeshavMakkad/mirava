@@ -18,3 +18,9 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      - key: SITE_URL
+        sync: false
+      - key: APPS_SCRIPT_URL
+        sync: false
+      - key: APPS_SCRIPT_SECRET
+        sync: false

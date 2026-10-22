@@ -7,11 +7,11 @@ import { JalMarkup } from './Markup'
 import './jal-parampara.page.css'
 
 export default function JalParamparaPage() {
-  const { me, isGuest, refreshMe } = useAuth()
+  const { me, refreshMe } = useAuth()
   const navigate = useNavigate()
   const ref = useLegacyPage(
     (root: HTMLElement, ctx: LegacyContext) => initJalParampara(root, ctx, { onScore: () => refreshMe() }),
-    { me, isGuest, navigate },
+    { me, navigate },
   )
   return (
     <PageScope name="jal-parampara" title="JalParampara — Yesterday's Wisdom. Tomorrow's Water. · MIRAVA">

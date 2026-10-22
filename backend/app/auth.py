@@ -99,16 +99,7 @@ def require_roles(*roles: str):
     return checker
 
 
-def require_registered(user: Annotated[CurrentUser, Depends(get_current_user)]) -> CurrentUser:
-    """Rejects guest (anonymous) sessions."""
-    if user.is_anonymous or user.profile.is_guest:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Create an account to use this feature")
-    return user
-
-
 AuthUser = Annotated[CurrentUser, Depends(get_current_user)]
 OptionalUser = Annotated[CurrentUser | None, Depends(get_optional_user)]
-RegisteredUser = Annotated[CurrentUser, Depends(require_registered)]
-TeacherUser = Annotated[CurrentUser, Depends(require_roles("teacher", "admin"))]
 AdminUser = Annotated[CurrentUser, Depends(require_roles("admin"))]
 DB = Annotated[Session, Depends(get_db)]

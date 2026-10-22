@@ -10,7 +10,7 @@ import { ProfileSymbolIcon } from './ProfileSymbol'
  * is global. The avatar shows the profile symbol chosen on /profile.
  */
 export function AccountMenu({ className }: { className?: string }) {
-  const { me, user, isGuest, role, signOut } = useAuth()
+  const { me, user, role, signOut } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
@@ -35,7 +35,7 @@ export function AccountMenu({ className }: { className?: string }) {
     )
   }
 
-  const name = me?.profile.display_name || me?.profile.username || (isGuest ? 'Guest' : 'Explorer')
+  const name = me?.profile.display_name || me?.profile.username || 'Member'
 
   return (
     <div className={['mv-account', className].filter(Boolean).join(' ')} ref={ref}>
@@ -59,18 +59,12 @@ export function AccountMenu({ className }: { className?: string }) {
           <div className="mv-who" translate="no">
             {name}
           </div>
-          {isGuest ? <div className="mv-sub">Guest session</div> : <div className="mv-sub" translate="no">{user.email}</div>}
+          <div className="mv-sub" translate="no">{user.email}</div>
           {me && (
             <div className="mv-stats">
               <span>✦ {me.profile.total_xp} XP</span>
               <span>🔥 {me.profile.daily_streak}</span>
               {me.rank && <span>#{me.rank}</span>}
-            </div>
-          )}
-          {isGuest && (
-            <div className="mv-guest-note">
-              Playing as a guest. <Link to="/signup" state={{ upgrade: true }}>Create an account</Link> to keep your
-              progress and join the leaderboard.
             </div>
           )}
           <Link to="/profile" role="menuitem" onClick={() => setOpen(false)}>
@@ -79,11 +73,6 @@ export function AccountMenu({ className }: { className?: string }) {
           <Link to="/explore" role="menuitem" onClick={() => setOpen(false)}>
             Explore
           </Link>
-          {!isGuest && (
-            <Link to="/classroom" role="menuitem" onClick={() => setOpen(false)}>
-              Classroom
-            </Link>
-          )}
           {role === 'admin' && (
             <Link to="/admin" role="menuitem" onClick={() => setOpen(false)}>
               Administrator console

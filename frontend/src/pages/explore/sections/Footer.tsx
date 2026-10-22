@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../../auth/AuthProvider'
 
 export function Footer() {
-  const { isGuest, role } = useAuth()
+  const { role } = useAuth()
   return (
     <footer className="footer">
       <div>
@@ -34,7 +34,6 @@ export function Footer() {
             <a href="#art">Interactive museum</a>
             <a href="#news">Heritage news</a>
             <Link to="/profile">Profile &amp; leaderboards</Link>
-            {!isGuest && <Link to="/classroom">Classroom</Link>}
             {role === 'admin' && <Link to="/admin">Administrator console</Link>}
             <a href="#top">Back to top ↑</a>
           </div>

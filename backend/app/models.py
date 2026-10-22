@@ -31,7 +31,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 
-ROLES = ("tourist", "student", "teacher", "admin")
+ROLES = ("member", "admin")
 
 
 def _uuid_pk() -> Mapped[uuid.UUID]:
@@ -45,7 +45,7 @@ def _created_at() -> Mapped[datetime]:
 class Profile(Base):
     __tablename__ = "profiles"
     __table_args__ = (
-        CheckConstraint("role in ('tourist','student','teacher','admin')", name="profiles_role_check"),
+        CheckConstraint("role in ('member','admin')", name="profiles_role_check"),
         CheckConstraint("preferred_language in ('en','hi')", name="profiles_language_check"),
         CheckConstraint("avatar in ('lotus','fort','peacock','chakra','leaf','sun')", name="profiles_avatar_check"),
         CheckConstraint("length(bio) <= 600 and length(location) <= 100", name="profiles_text_lengths"),
@@ -55,7 +55,7 @@ class Profile(Base):
     username: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     display_name: Mapped[str | None] = mapped_column(Text)
     email: Mapped[str | None] = mapped_column(Text)
-    role: Mapped[str] = mapped_column(Text, nullable=False, server_default="tourist")
+    role: Mapped[str] = mapped_column(Text, nullable=False, server_default="member")
     is_guest: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     avatar_url: Mapped[str | None] = mapped_column(Text)
     total_xp: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -176,55 +176,6 @@ class UserState(Base):
     key: Mapped[str] = mapped_column(Text, primary_key=True)
     value: Mapped[Any] = mapped_column(JSONB, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-
-
-class Classroom(Base):
-    __tablename__ = "classrooms"
-
-    id: Mapped[uuid.UUID] = _uuid_pk()
-    teacher_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
-    class_name: Mapped[str] = mapped_column(Text, nullable=False)
-    class_code: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    created_at: Mapped[datetime] = _created_at()
-
-
-class ClassroomMember(Base):
-    __tablename__ = "classroom_members"
-    __table_args__ = (UniqueConstraint("classroom_id", "student_id"),)
-
-    id: Mapped[uuid.UUID] = _uuid_pk()
-    classroom_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("classrooms.id", ondelete="CASCADE"), nullable=False)
-    student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
-    joined_at: Mapped[datetime] = _created_at()
-
-
-class Assignment(Base):
-    __tablename__ = "assignments"
-
-    id: Mapped[uuid.UUID] = _uuid_pk()
-    classroom_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("classrooms.id", ondelete="CASCADE"), nullable=False, index=True)
-    teacher_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
-    # NULL = whole class
-    student_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
-    title: Mapped[str] = mapped_column(Text, nullable=False)
-    description: Mapped[str | None] = mapped_column(Text)
-    question_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
-    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = _created_at()
-
-
-class AssignmentResult(Base):
-    __tablename__ = "assignment_results"
-    __table_args__ = (UniqueConstraint("assignment_id", "student_id"),)
-
-    id: Mapped[uuid.UUID] = _uuid_pk()
-    assignment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False)
-    student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
-    score: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    correct_answers: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    total_questions: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    answers: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-    submitted_at: Mapped[datetime] = _created_at()
 
 
 class News(Base):

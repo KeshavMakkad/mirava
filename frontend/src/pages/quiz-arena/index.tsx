@@ -27,7 +27,7 @@ const NAV = [
 ] as const
 
 function Arena() {
-  const { me, isGuest, refreshMe } = useAuth()
+  const { me, refreshMe } = useAuth()
   useLanguage()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -48,7 +48,7 @@ function Arena() {
       })
     return fn
   })
-  const ref = useLegacyPage(init, { me, isGuest, navigate })
+  const ref = useLegacyPage(init, { me, navigate })
 
   return (
     <div ref={ref}>
@@ -97,17 +97,6 @@ function Arena() {
                     'सभी डिवाइसों पर सहेजा गया और हर विद्वान के सर्वश्रेष्ठ प्रश्नोत्तरी मंच खेल के आधार पर क्रमबद्ध। यहाँ दिखने के लिए साइन इन करें।',
                   )}
                 </p>
-                {isGuest && (
-                  <p className="qa-guest qa-board-guest">
-                    {tr(
-                      'Guests can play, but only signed-in players publish XP to the Hall of Scholars.',
-                      'अतिथि खेल सकते हैं, लेकिन केवल साइन-इन खिलाड़ी ही विद्वानों की सभा में अनुभव अंक प्रकाशित करते हैं।',
-                    )}{' '}
-                    <Link to="/signup" state={{ upgrade: true }}>
-                      Create an account
-                    </Link>
-                  </p>
-                )}
               </div>
             </div>
             <LeaderboardPanel boards={['quiz-arena']} theme="light" variant="scholars" limit={50} />

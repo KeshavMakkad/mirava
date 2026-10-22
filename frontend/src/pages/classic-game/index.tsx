@@ -7,11 +7,11 @@ import './classic-game.page.css'
 
 /** Lost Legends of Bharat, classic 2D open-world edition (ported from classic-game.html). */
 export default function ClassicGamePage() {
-  const { me, isGuest, refreshMe } = useAuth()
+  const { me, refreshMe } = useAuth()
   const navigate = useNavigate()
   const ref = useLegacyPage(
     (root: HTMLElement, ctx: LegacyContext) => initClassicGame(root, ctx, { onScore: () => refreshMe() }),
-    { me, isGuest, navigate },
+    { me, navigate },
   )
 
   return (

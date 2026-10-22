@@ -12,7 +12,6 @@ import { api, type GameKey, type GameScoreIn, type GameScoreOut, type Me } from 
 export interface LegacyContext {
   /** Current profile (null for signed-out visitors or while loading). */
   me: Me | null
-  isGuest: boolean
   navigate: NavigateFunction
   /** Persist small progress blobs server-side (replaces localStorage). */
   loadState: <T>(key: string) => Promise<T | null>
@@ -27,8 +26,8 @@ export type LegacyInit = (root: HTMLElement, ctx: LegacyContext) => void | (() =
 
 /**
  * Runs `init` once after mount with a context object, and on unmount runs the
- * cleanup it returned plus anything registered via ctx.onCleanup. `me` and
- * `isGuest` on the context are live getters, so they stay current.
+ * cleanup it returned plus anything registered via ctx.onCleanup. `me` on the
+ * context is a live getter, so it stays current.
  */
 export function useLegacyPage(
   init: LegacyInit,
@@ -46,9 +45,6 @@ export function useLegacyPage(
     const ctx: LegacyContext = {
       get me() {
         return depsRef.current.me
-      },
-      get isGuest() {
-        return depsRef.current.isGuest
       },
       navigate: ((...args: unknown[]) =>
         (depsRef.current.navigate as (...a: unknown[]) => void)(...args)) as NavigateFunction,

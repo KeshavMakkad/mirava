@@ -1,7 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { api, type Me, type Profile, type Role } from '../lib/api'
+import { ApiError, api, type Me, type Profile, type Role } from '../lib/api'
 import { supabase } from '../lib/supabase'
 
 export interface SignUpInput {
@@ -9,7 +9,8 @@ export interface SignUpInput {
   password: string
   username: string
   displayName?: string
-  role: Exclude<Role, 'admin'>
+  /** Where to land after the confirmation link. */
+  next?: string
 }
 
 interface AuthContextValue {
@@ -19,20 +20,13 @@ interface AuthContextValue {
   me: Me | null
   /** True until the initial Supabase session check has finished. */
   loading: boolean
-  isGuest: boolean
   role: Role | null
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (input: SignUpInput) => Promise<{ needsConfirmation: boolean }>
-  sendMagicLink: (email: string) => Promise<void>
+  /** Creates the account and emails a confirmation link (sent by our backend). */
+  signUp: (input: SignUpInput) => Promise<void>
+  sendMagicLink: (email: string, next?: string) => Promise<void>
   /** Redirects to Google; Supabase returns to /auth/callback?next=<next>. */
   signInWithGoogle: (next?: string) => Promise<void>
-  continueAsGuest: () => Promise<void>
-  /**
-   * Link an email to the current anonymous session (same user id, so progress
-   * is kept). Supabase only allows setting a password once that email is
-   * verified, so the confirmation link lands on /reset-password?setup=1.
-   */
-  upgradeGuest: (email: string) => Promise<void>
   sendPasswordReset: (email: string) => Promise<void>
   updatePassword: (password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -42,6 +36,11 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const redirectTo = (path: string) => `${window.location.origin}${path}`
+
+/** The backend answers 503 "Email is not configured" until its emailer is set up. */
+function emailerMissing(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 503 && /not configured/i.test(e.message)
+}
 
 function fail(error: { message: string } | null): void {
   if (error) throw new Error(error.message)
@@ -109,7 +108,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       me,
       loading,
-      isGuest: !!user?.is_anonymous,
       role: me?.profile.role ?? null,
 
       async signIn(email, password) {
@@ -117,25 +115,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fail(error)
       },
 
-      async signUp({ email, password, username, displayName, role }) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: redirectTo('/auth/callback'),
-            data: { username, display_name: displayName || username, role },
-          },
-        })
-        fail(error)
-        return { needsConfirmation: !data.session }
+      async signUp({ email, password, username, displayName, next }) {
+        try {
+          await api.auth.signup({ email, password, username, display_name: displayName || username, next })
+        } catch (e) {
+          if (!emailerMissing(e)) throw e
+          // Our emailer isn't configured on this server yet: use Supabase's own mailer.
+          const { error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { emailRedirectTo: redirectTo('/auth/callback'), data: { username, display_name: displayName || username } },
+          })
+          fail(error)
+        }
       },
 
-      async sendMagicLink(email) {
-        const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: { emailRedirectTo: redirectTo('/auth/callback'), shouldCreateUser: true },
-        })
-        fail(error)
+      async sendMagicLink(email, next) {
+        try {
+          await api.auth.magicLink(email, next)
+        } catch (e) {
+          if (!emailerMissing(e)) throw e
+          const { error } = await supabase.auth.signInWithOtp({
+            email,
+            options: { emailRedirectTo: redirectTo(`/auth/callback?next=${encodeURIComponent(next || '/explore')}`) },
+          })
+          fail(error)
+        }
       },
 
       async signInWithGoogle(next) {
@@ -147,22 +152,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fail(error)
       },
 
-      async continueAsGuest() {
-        const { error } = await supabase.auth.signInAnonymously()
-        fail(error)
-      },
-
-      async upgradeGuest(email) {
-        const { error } = await supabase.auth.updateUser(
-          { email },
-          { emailRedirectTo: redirectTo('/reset-password?setup=1') },
-        )
-        fail(error)
-      },
-
       async sendPasswordReset(email) {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectTo('/reset-password') })
-        fail(error)
+        try {
+          await api.auth.passwordReset(email)
+        } catch (e) {
+          if (!emailerMissing(e)) throw e
+          const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectTo('/reset-password') })
+          fail(error)
+        }
       },
 
       async updatePassword(password) {

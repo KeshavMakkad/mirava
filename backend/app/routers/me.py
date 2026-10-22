@@ -60,8 +60,6 @@ class ProfileUpdate(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=40)
     username: str | None = None
     avatar_url: str | None = Field(default=None, max_length=500)
-    # Users may switch between the self-service roles; admin is granted manually.
-    role: Literal["tourist", "student", "teacher"] | None = None
     bio: str | None = Field(default=None, max_length=600)
     location: str | None = Field(default=None, max_length=100)
     preferred_language: Literal["en", "hi"] | None = None
@@ -118,8 +116,6 @@ def update_me(body: ProfileUpdate, user: AuthUser, db: DB):
         profile.display_name = body.display_name.strip()
     if body.avatar_url is not None:
         profile.avatar_url = body.avatar_url or None
-    if body.role is not None and profile.role != "admin":
-        profile.role = body.role
     if body.bio is not None:
         profile.bio = body.bio.strip()
     if body.location is not None:

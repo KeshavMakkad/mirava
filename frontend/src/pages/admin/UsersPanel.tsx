@@ -5,7 +5,7 @@ import { api, type Profile, type Role } from '../../lib/api'
 import { errMsg, fmtDate, useDebounced, type Toast } from './shared'
 
 const PAGE = 20
-const ROLES: Role[] = ['tourist', 'student', 'teacher', 'admin']
+const ROLES: Role[] = ['member', 'admin']
 
 export function UsersPanel({ toast }: { toast: Toast }) {
   const qc = useQueryClient()
@@ -38,7 +38,7 @@ export function UsersPanel({ toast }: { toast: Toast }) {
         <div className="card users-card">
           <h2>Users &amp; roles</h2>
           <p className="hint">
-            Promote teachers so they can run classrooms, or grant administrator access to this console. Role changes
+            Grant or remove administrator access to this console. Role changes
             apply on the user's next page load. You can't remove your own admin role.
           </p>
           <div className="toolbar">
@@ -67,7 +67,6 @@ export function UsersPanel({ toast }: { toast: Toast }) {
                   <div className="item user-row" key={u.id}>
                     <div>
                       <small>@{u.username}</small>
-                      {u.is_guest && <span className="badge gold">Guest</span>}
                       {u.role === 'admin' && <span className="badge dark">Admin</span>}
                       {isMe && <span className="badge green">You</span>}
                       <h4>{u.display_name || u.username}</h4>

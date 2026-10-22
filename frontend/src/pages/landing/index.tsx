@@ -1,11 +1,10 @@
-import { Fragment, useEffect, useRef, useState, type RefObject } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Fragment, useEffect, useRef, type RefObject } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
 import { AccountMenu } from '../../components/AccountMenu'
 import { LanguageToggle } from '../../components/LanguageToggle'
 import { PageScope } from '../../components/PageScope'
 import './landing.page.css'
-import { useAuthProviders } from '../../auth/useAuthProviders'
 
 const MEMBERS = [
   ['AP', 'Adirut Pandita', 'Team Leader & Lead Developer'],
@@ -145,28 +144,12 @@ function useLandingEffects(root: RefObject<HTMLDivElement | null>) {
 }
 
 export default function Landing() {
-  const { user, me, isGuest, loading, continueAsGuest } = useAuth()
-  const guestEnabled = !!useAuthProviders()?.anonymous
-  const navigate = useNavigate()
+  const { user, me, loading } = useAuth()
   const rootRef = useRef<HTMLDivElement>(null)
-  const [guestBusy, setGuestBusy] = useState(false)
-  const [guestError, setGuestError] = useState<string | null>(null)
   useLandingEffects(rootRef)
 
   const signedIn = !!user
-  const name = me?.profile.display_name || me?.profile.username || (isGuest ? 'explorer' : null)
-
-  const startGuest = async () => {
-    setGuestError(null)
-    setGuestBusy(true)
-    try {
-      await continueAsGuest()
-      navigate('/explore')
-    } catch (e) {
-      setGuestError(e instanceof Error ? e.message : 'Could not start a guest session. Please try again.')
-      setGuestBusy(false)
-    }
-  }
+  const name = me?.profile.display_name || me?.profile.username || null
 
   return (
     <PageScope name="landing" title="Mirava — Living Indian Heritage">
@@ -225,21 +208,12 @@ export default function Landing() {
                 <Link className="hero-ghost" to="/explore">
                   Continue to Explore ↗
                 </Link>
-              ) : guestEnabled ? (
-                <button type="button" className="hero-ghost" onClick={startGuest} disabled={guestBusy || loading}>
-                  {guestBusy ? 'Opening Mirava…' : 'Continue as guest'}
-                </button>
               ) : (
                 <Link className="hero-ghost" to="/login">
                   Log in ↗
                 </Link>
               )}
             </div>
-            {guestError && (
-              <p className="cta-error" role="alert">
-                {guestError}
-              </p>
-            )}
           </div>
         </header>
 
@@ -465,17 +439,7 @@ export default function Landing() {
                     <Link className="alt" to="/login">
                       I already have an account
                     </Link>
-                    {guestEnabled && (
-                      <button type="button" className="alt" onClick={startGuest} disabled={guestBusy || loading}>
-                        {guestBusy ? 'Opening Mirava…' : 'Continue as guest'}
-                      </button>
-                    )}
                   </div>
-                  {guestError && (
-                    <p className="cta-error" role="alert">
-                      {guestError}
-                    </p>
-                  )}
                 </>
               )}
             </div>

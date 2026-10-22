@@ -72,7 +72,7 @@ export function initArena(root, ctx, hooks = {}) {
 
   const playerName = () => {
     const p = ctx.me && ctx.me.profile
-    return (p && (p.display_name || p.username)) || (ctx.isGuest ? 'Guest' : 'Explorer')
+    return (p && (p.display_name || p.username)) || 'Scholar'
   }
 
   /* ---------- persistence (server-side per-user state) ---------- */
@@ -193,7 +193,7 @@ export function initArena(root, ctx, hooks = {}) {
     const cal = Array.from({ length: 14 }, (_, i) => { const d = addDays(td, i - 13); return `<i class="${P.daily.hist[d] ? 'on' : ''}" title="${d}"></i>` }).join('')
     const nextM = (() => { for (const r of BANK) { const ix = RIDX(r.id); if (!regionUnlocked(ix)) break; for (let mi = 0; mi < r.missions.length; mi++) if (!starsOf(r.id, mi)) return { r, mi } } return null })()
     const hour = new Date().getHours(), greet = hour < 12 ? 'Suprabhat' : hour < 17 ? 'Namaste' : 'Shubh sandhya'
-    const guest = ctx.isGuest ? `<p class="qa-guest">${tx("You're playing as a guest — your progress is saved to this guest account, but only signed-in players publish XP to the Hall of Scholars.", 'आप अतिथि के रूप में खेल रहे हैं — आपकी प्रगति इस अतिथि खाते में सहेजी जाती है, लेकिन केवल साइन-इन खिलाड़ी ही विद्वानों की सभा में अनुभव अंक प्रकाशित करते हैं।')} <a href="/signup" data-nav="/signup">${tx('Create an account', 'खाता बनाएँ')}</a></p>` : ''
+    const guest = ''
     $('s-hub').innerHTML = `<div class="wrap">${guest}
  <div class="hero"><div class="card hero-main">${MANDALA}<div class="k">${greet}, <span translate="no">${esc(P.name)}</span> · Level ${L} ${titleOf(L)}</div>
   <h1>Five thousand years.<br><em>Ten questions</em> at a time.</h1>

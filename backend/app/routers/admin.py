@@ -181,7 +181,7 @@ def delete_question(question_id: str, _: AdminUser, db: DB) -> None:
 # ---- users -------------------------------------------------------------------------
 
 class RoleIn(BaseModel):
-    role: Literal["tourist", "student", "teacher", "admin"]
+    role: Literal["member", "admin"]
 
 
 @router.get("/users")
@@ -220,8 +220,7 @@ def stats(_: AdminUser, db: DB) -> dict:
 
     return {
         "users": count(select(func.count()).select_from(Profile).where(Profile.is_guest.is_(False))),
-        "guests": count(select(func.count()).select_from(Profile).where(Profile.is_guest)),
-        "teachers": count(select(func.count()).select_from(Profile).where(Profile.role == "teacher")),
+        "admins": count(select(func.count()).select_from(Profile).where(Profile.role == "admin")),
         "questions_active": count(select(func.count()).select_from(Question).where(Question.is_active)),
         "questions_admin": count(select(func.count()).select_from(Question).where(Question.source == "admin")),
         "news_published": count(select(func.count()).select_from(News).where(News.is_published)),

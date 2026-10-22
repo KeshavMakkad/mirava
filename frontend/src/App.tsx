@@ -6,10 +6,10 @@ const Landing = lazy(() => import('./pages/landing'))
 const Login = lazy(() => import('./pages/auth/Login'))
 const Signup = lazy(() => import('./pages/auth/Signup'))
 const AuthCallback = lazy(() => import('./pages/auth/AuthCallback'))
+const AuthConfirm = lazy(() => import('./pages/auth/AuthConfirm'))
 const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'))
 const Explore = lazy(() => import('./pages/explore'))
 const QuizArena = lazy(() => import('./pages/quiz-arena'))
-const Classroom = lazy(() => import('./pages/classroom'))
 const Profile = lazy(() => import('./pages/profile'))
 const Admin = lazy(() => import('./pages/admin'))
 const LostLegends = lazy(() => import('./pages/lost-legends'))
@@ -26,15 +26,14 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<RedirectIfAuthed><Login /></RedirectIfAuthed>} />
-        {/* Guests may reach signup to upgrade their account. */}
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/signup" element={<RedirectIfAuthed><Signup /></RedirectIfAuthed>} />
         <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/auth/confirm" element={<AuthConfirm />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
         <Route path="/explore" element={<RequireAuth><Explore /></RequireAuth>} />
         <Route path="/quiz" element={<RequireAuth><QuizArena /></RequireAuth>} />
         <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
-        <Route path="/classroom" element={<RequireAuth registered><Classroom /></RequireAuth>} />
         <Route path="/admin" element={<RequireRole roles={['admin']}><Admin /></RequireRole>} />
 
         <Route path="/apps/lost-legends" element={<RequireAuth><LostLegends /></RequireAuth>} />
@@ -50,7 +49,8 @@ export default function App() {
         <Route path="/login.html" element={<Navigate to="/login" replace />} />
         <Route path="/signup.html" element={<Navigate to="/signup" replace />} />
         <Route path="/explore.html" element={<Navigate to="/explore" replace />} />
-        <Route path="/classroom.html" element={<Navigate to="/classroom" replace />} />
+        <Route path="/classroom.html" element={<Navigate to="/explore" replace />} />
+        <Route path="/classroom" element={<Navigate to="/explore" replace />} />
         <Route path="/quiz.html" element={<Navigate to="/quiz" replace />} />
         <Route path="/administrator.html" element={<Navigate to="/admin" replace />} />
         <Route path="/game.html" element={<Navigate to="/apps/lost-legends" replace />} />

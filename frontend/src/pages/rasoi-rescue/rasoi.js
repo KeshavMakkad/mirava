@@ -1353,7 +1353,6 @@ async function vaultPage() {
         <h2>Community recipe vault — share with explicit consent.</h2>
         ${vaultSync.error ? `<div class="message error">${esc(vaultSync.error)}</div>` : ''}
         ${!vaultSync.signedIn && vaultSync.online ? '<div class="message">Sign in to sync your family recipes to your Mirava account. Until then they stay on this device.</div>' : ''}
-        ${ctx.isGuest && vaultSync.signedIn ? '<div class="message">You are exploring as a guest. <a href="/signup" data-rr-signup><u>Create an account</u></a> to keep your family recipes safe.</div>' : ''}
         <div class="actions">
           <a class="btn dark" href="#/record">+ Preserve another recipe</a>
           <button class="btn outline" id="export-all" type="button">↓ Export recipe backup</button>

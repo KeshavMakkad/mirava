@@ -8,9 +8,9 @@ import './sentinel.page.css'
 
 /** Mirava Sentinel — Monument Health Scanner (port of legacy/Sentinel.html). */
 export default function SentinelPage() {
-  const { me, isGuest } = useAuth()
+  const { me } = useAuth()
   const navigate = useNavigate()
-  const ref = useLegacyPage(init, { me, isGuest, navigate })
+  const ref = useLegacyPage(init, { me, navigate })
   return (
     <PageScope name="sentinel" title="Mirava Sentinel — Monument Health Scanner">
       <div ref={ref}>

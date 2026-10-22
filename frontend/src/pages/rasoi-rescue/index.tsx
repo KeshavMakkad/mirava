@@ -26,9 +26,9 @@ function currentRoute() {
  * live in the server vault (api.rasoi), with a device copy for offline use.
  */
 export default function RasoiRescue() {
-  const { me, isGuest } = useAuth()
+  const { me } = useAuth()
   const navigate = useNavigate()
-  const ref = useLegacyPage(initRasoi, { me, isGuest, navigate })
+  const ref = useLegacyPage(initRasoi, { me, navigate })
   const [route, setRoute] = useState(currentRoute)
   const [navOpen, setNavOpen] = useState(false)
 
