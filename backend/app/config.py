@@ -1,6 +1,9 @@
+import json
 from functools import lru_cache
+from typing import Annotated
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -16,7 +19,8 @@ class Settings(BaseSettings):
     # the project uses asymmetric JWT signing keys (verified through JWKS).
     supabase_jwt_secret: str | None = None
 
-    cors_origins: list[str] = ["http://localhost:5173"]
+    # Accepts a JSON list, a comma-separated list, or a single URL.
+    cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 
     # Daily quiz rolls over at midnight in this timezone.
     quiz_timezone: str = "Asia/Kolkata"
@@ -31,6 +35,23 @@ class Settings(BaseSettings):
     # to store Rasoi Rescue recipe photos/audio in a private Storage bucket.
     supabase_secret_key: str | None = None
     recipe_media_bucket: str = "mirava-recipe-media"
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_origins(cls, v: object) -> object:
+        if not isinstance(v, str):
+            return v
+        v = v.strip()
+        if not v:
+            return ["http://localhost:5173"]
+        if v.startswith("["):
+            try:
+                v = json.loads(v)
+            except ValueError:
+                v = v.strip("[]")
+        items = v if isinstance(v, list) else v.split(",")
+        # Browsers send Origin without a trailing slash; quotes come from copy/paste.
+        return [str(o).strip().strip("'\"").rstrip("/") for o in items if str(o).strip().strip("'\"")]
 
 
 @lru_cache
