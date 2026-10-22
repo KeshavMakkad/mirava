@@ -682,3 +682,20 @@
 @media (max-width: 640px) {
   .day-cell .fest-more { font-size: 7px; left: 3px; bottom: 3px; padding: 0 3px; }
 }
+
+/* All twelve months always visible (the scrolling row hid Oct–Dec on laptops
+   and May–Dec on phones, with no visible scrollbar). */
+.month-tabs {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+  overflow: visible;
+}
+.month-tab {
+  padding: 7px 0;
+  text-align: center;
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .month-tabs { grid-template-columns: repeat(6, minmax(0, 1fr)); row-gap: 6px; }
+}

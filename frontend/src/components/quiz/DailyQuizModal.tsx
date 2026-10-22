@@ -81,6 +81,8 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<QuizResult | null>(null)
   const [attempt, setAttempt] = useState<QuizAttempt | null>(null)
   const [confetti, setConfetti] = useState<ConfettiBurst[]>([])
+  // The free-tier API sleeps when idle; say so instead of spinning silently.
+  const [slow, setSlow] = useState<0 | 1 | 2>(0)
 
   const deadline = useRef(0)
   const answering = useRef(false)
@@ -139,6 +141,17 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     api.quiz.dailyStatus().then(onStatus, onStatusError)
   }, [onStatus, onStatusError])
+
+  useEffect(() => {
+    if (phase !== 'loading') return
+    setSlow(0)
+    const a = window.setTimeout(() => setSlow(1), 4000)
+    const b = window.setTimeout(() => setSlow(2), 30000)
+    return () => {
+      window.clearTimeout(a)
+      window.clearTimeout(b)
+    }
+  }, [phase])
 
   const applySession = useCallback((s: QuizSession) => {
     setPlay({
@@ -365,6 +378,16 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
           <div className="dq-loading">
             <div className="dq-spinner" />
             {tr("Loading today's challenge…", 'आज की चुनौती लोड हो रही है…')}
+            {slow >= 1 && (
+              <small className="dq-slow">
+                {tr('Waking up the Mirava server — this can take up to a minute the first time.', 'मिरावा सर्वर शुरू हो रहा है — पहली बार में एक मिनट तक लग सकता है।')}
+              </small>
+            )}
+            {slow === 2 && (
+              <button type="button" className="dq-start" onClick={() => void loadStatus()}>
+                {tr('Try again', 'फिर कोशिश करें')}
+              </button>
+            )}
           </div>
         )}
 
@@ -390,7 +413,9 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
             <h2 id="dqTitle" className="dq-h2">
               Heritage quiz
             </h2>
-            <p className="dq-sub">{`${total} questions · ${secs} seconds each · 1,000-question bank · fresh daily challenge`}</p>
+            <p className="dq-sub">
+              {tr('Ten questions on India’s heritage — the same set for everyone, new every midnight.', 'भारत की विरासत पर दस प्रश्न — सबके लिए एक जैसे, हर आधी रात नए।')}
+            </p>
             <div className="dq-banner">
               <div>
                 <strong>🌅 TODAY'S HERITAGE CHALLENGE</strong>
@@ -403,9 +428,6 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
               </div>
             </div>
             <div className="dq-rules">
-              <span>
-                <b>⏱</b> {tr('{secs}s per question', 'प्रति प्रश्न {secs} सेकंड', { secs })}
-              </span>
               <span>
                 <b>✦</b> {tr('Speed & streak bonus', 'गति और लगातार सही उत्तर का बोनस')}
               </span>
@@ -430,10 +452,21 @@ function DailyQuizDialog({ onClose }: { onClose: () => void }) {
         {phase === 'play' && play && (
           <div>
             <div className="dq-play-top">
-              <span className={`dq-timer${!reveal && timeLeft <= 5 ? ' warning' : ''}`} id="quizTimer">
-                {reveal ? '⏱ —' : `⏱ ${timeLeft}s`}
+              <span
+                className={`dq-timer${!reveal && timeLeft <= 5 ? ' warning' : ''}${reveal ? (reveal.correct ? ' is-right' : ' is-wrong') : ''}`}
+                id="quizTimer"
+              >
+                {reveal
+                  ? reveal.correct
+                    ? `✓ +${reveal.points} ${tr('pts', 'अंक')}`
+                    : reveal.selected === null
+                      ? `⌛ ${tr("Time's up", 'समय समाप्त')}`
+                      : `✗ ${tr('Wrong', 'गलत')}`
+                  : `⏱ ${timeLeft}s`}
               </span>
-              <span className="dq-counter">{`${Math.min(play.index + 1, play.total)} / ${play.total}`}</span>
+              <span className="dq-counter">
+                {tr('Question', 'प्रश्न')} <b>{Math.min(play.index + 1, play.total)}</b> / {play.total}
+              </span>
             </div>
             <div className="dq-dots">{dots}</div>
             {play.question && (

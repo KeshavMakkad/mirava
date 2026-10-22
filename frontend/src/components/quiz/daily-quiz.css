@@ -584,3 +584,64 @@
     animation-duration: 0.01ms !important;
   }
 }
+
+/* ---- polish (Oct 2026) ---- */
+.dq-root .dq-play-top {
+  margin-right: 52px; /* keep clear of the close button */
+  align-items: center;
+}
+.dq-root .dq-timer {
+  margin-bottom: 0;
+  min-width: 92px;
+  text-align: center;
+}
+.dq-root .dq-timer.is-right {
+  background: #5f9a4f;
+  color: #fff;
+}
+.dq-root .dq-timer.is-wrong {
+  background: #b84242;
+  color: #fff;
+}
+.dq-root .dq-counter {
+  padding: 6px 12px;
+  border-radius: 99px;
+  background: #f5ead9;
+  color: var(--dq-muted);
+  letter-spacing: 0.06em;
+}
+.dq-root .dq-counter b {
+  color: var(--dq-ink);
+}
+.dq-root .dq-dots {
+  flex-wrap: nowrap;
+  gap: clamp(3px, 1vw, 6px);
+}
+.dq-root .dq-dot {
+  flex: 0 1 28px;
+  width: auto;
+  min-width: 0;
+  aspect-ratio: 1;
+  height: auto;
+}
+.dq-root .dq-loading {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+.dq-root .dq-slow {
+  max-width: 340px;
+  text-align: center;
+  color: var(--dq-muted);
+  font: 400 13px/1.5 'Manrope', sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+@media (max-width: 560px) {
+  .dq-root .dq-play-top {
+    margin-right: 48px;
+  }
+  .dq-root .dq-dot {
+    font-size: 9px;
+  }
+}
