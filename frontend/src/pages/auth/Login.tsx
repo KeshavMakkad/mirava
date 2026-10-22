@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
 import { AuthShell, Field, GoogleButton, Msg } from './AuthShell'
 import { errorText } from './authUtils'
+import { useAuthProviders } from '../../auth/useAuthProviders'
 
 type Mode = 'password' | 'magic' | 'forgot'
 type Sent = { kind: 'magic' | 'reset'; email: string } | null
@@ -11,6 +12,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function Login() {
   const { signIn, signInWithGoogle, sendMagicLink, sendPasswordReset, continueAsGuest, isGuest } = useAuth()
+  const providers = useAuthProviders()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from || '/explore'
@@ -166,10 +168,14 @@ export default function Login() {
           {busy === 'submit' ? (mode === 'password' ? 'Opening Mirava…' : 'Sending…') : submitLabel}
         </button>
       </form>
-      <div className="divider">or</div>
-      <button className="btn g" type="button" onClick={onGuest} disabled={!!busy}>
-        {busy === 'guest' ? 'Opening Mirava…' : 'Continue as guest'}
-      </button>
+      {providers?.anonymous && (
+        <>
+          <div className="divider">or</div>
+          <button className="btn g" type="button" onClick={onGuest} disabled={!!busy}>
+            {busy === 'guest' ? 'Opening Mirava…' : 'Continue as guest'}
+          </button>
+        </>
+      )}
       <p className="switch">
         Don't have an account? <Link to="/signup">Sign up</Link>
       </p>

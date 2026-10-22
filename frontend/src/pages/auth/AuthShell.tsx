@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { LanguageToggle } from '../../components/LanguageToggle'
 import { PageScope } from '../../components/PageScope'
 import './auth.page.css'
+import { useAuthProviders } from '../../auth/useAuthProviders'
 
 function ring(n: number, rx: number, ry: number, cy: number, fill: string, opacity: number) {
   return Array.from({ length: n }, (_, i) => (
@@ -175,6 +176,8 @@ export function Spinner({ label }: { label: string }) {
 
 /** "Continue with Google" (Supabase OAuth). */
 export function GoogleButton({ onClick, busy, disabled }: { onClick: () => void; busy: boolean; disabled?: boolean }) {
+  // Hidden until Google is enabled in Supabase (Authentication → Providers).
+  if (!useAuthProviders()?.google) return null
   return (
     <button className="btn google" type="button" onClick={onClick} disabled={disabled || busy}>
       <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">

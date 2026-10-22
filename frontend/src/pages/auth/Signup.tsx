@@ -5,6 +5,7 @@ import { FullPageSpinner } from '../../auth/guards'
 import { api, type Role } from '../../lib/api'
 import { AuthShell, Field, GoogleButton, Msg } from './AuthShell'
 import { errorText } from './authUtils'
+import { useAuthProviders } from '../../auth/useAuthProviders'
 
 type SignupRole = Exclude<Role, 'admin'>
 
@@ -30,6 +31,7 @@ function strength(p: string) {
 
 export default function Signup() {
   const { session, loading, isGuest, me, signUp, signInWithGoogle, upgradeGuest, refreshMe } = useAuth()
+  const providers = useAuthProviders()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from || '/explore'
@@ -155,7 +157,7 @@ export default function Signup() {
         </p>
       )}
       <Msg text={error} />
-      {!upgrade && (
+      {!upgrade && providers?.google && (
         <>
           <GoogleButton onClick={onGoogle} busy={googleBusy} disabled={busy} />
           <div className="divider" style={{ margin: '0 0 18px' }}>
